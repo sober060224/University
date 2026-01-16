@@ -1,0 +1,86 @@
+{
+  "files.associations": {
+    "iostream": "cpp",
+    "ostream": "cpp",
+    "vector": "cpp",
+    "array": "cpp",
+    "atomic": "cpp",
+    "bit": "cpp",
+    "cctype": "cpp",
+    "clocale": "cpp",
+    "cmath": "cpp",
+    "compare": "cpp",
+    "concepts": "cpp",
+    "cstdarg": "cpp",
+    "cstddef": "cpp",
+    "cstdint": "cpp",
+    "cstdio": "cpp",
+    "cstdlib": "cpp",
+    "ctime": "cpp",
+    "cwchar": "cpp",
+    "cwctype": "cpp",
+    "deque": "cpp",
+    "string": "cpp",
+    "unordered_map": "cpp",
+    "exception": "cpp",
+    "algorithm": "cpp",
+    "functional": "cpp",
+    "iterator": "cpp",
+    "memory": "cpp",
+    "memory_resource": "cpp",
+    "numeric": "cpp",
+    "random": "cpp",
+    "string_view": "cpp",
+    "system_error": "cpp",
+    "tuple": "cpp",
+    "type_traits": "cpp",
+    "utility": "cpp",
+    "initializer_list": "cpp",
+    "iomanip": "cpp",
+    "iosfwd": "cpp",
+    "istream": "cpp",
+    "limits": "cpp",
+    "new": "cpp",
+    "numbers": "cpp",
+    "sstream": "cpp",
+    "stdexcept": "cpp",
+    "streambuf": "cpp",
+    "typeinfo": "cpp",
+    "list": "cpp"
+  },
+  "java.jdt.ls.vmargs": "-Xmx4G",
+  "java.format.settings.url": ".vscode/java-formatter.xml",
+  "java.debug.settings.hotCodeReplace": "auto",
+  "java.saveActions.organizeImports": true,
+  "java.jdt.ls.java.home": "D:\\AAA_Software\\Code",
+  "java.configuration.runtimes": [
+    {
+      "name": "JavaSE-24",
+      "path": "D:\\AAA_Software\\Code"
+    }
+  ],
+  "editor.formatOnSave": true,
+  "workbench.colorTheme": "Default Dark Modern",
+  "workbench.colorCustomizations": {
+    "[Default Light Modern]": {
+      // 编辑器核心区域
+      "editor.background": "#C7EDCC",
+      // 文件资源管理器所在的侧边栏
+      "sideBar.background": "#BFE6C4",
+      // 最左侧的图标栏
+      "activityBar.background": "#C7EDCC",
+      // 集成终端
+      "terminal.background": "#C7EDCC",
+      // 窗口底部的状态栏
+      "statusBar.background": "#A6D4AB",
+      // 窗口顶部的标题栏
+      "titleBar.activeBackground": "#BFE6C4"
+    }
+  },
+  "C_Cpp.errorSquiggles": "enabled",
+  "java.configuration.updateBuildConfiguration": "interactive",
+  "editor.formatOnType": false,
+  "editor.minimap.renderCharacters": false,
+  "maven.view": "flat",
+  "java.debug.settings.onBuildFailureProceed": true
+}
