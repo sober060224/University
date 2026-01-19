@@ -14,6 +14,9 @@ public:
     Lnode(int t) : data(t), next(nullptr) {}
 };
 
+// 双指针检查链表成环
+bool CheckCycle(Lnode *head);
+
 /// @brief 头插法逆序建链表
 /// @return 头指针
 Lnode *headInsert();

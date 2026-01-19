@@ -28,6 +28,13 @@ void solve()
     InsertNode(b, t);
 
     // 删除结点（删除指定结点，并释放内存）
+
+    // 双指针检查链表成环
+    bool hasCycle = CheckCycle(b);
+    if (hasCycle)
+        cout << "链表存在环" << endl;
+    else
+        cout << "链表不存在环" << endl;
 }
 
 void InsertNode(Lnode *&b, Lnode *t)
@@ -181,6 +188,27 @@ void print(treeNode *n)
     print(n->right);
 }
 
+// 双指针检查链表成环
+bool CheckCycle(Lnode *head)
+{
+    if (head == nullptr || head->next == nullptr)
+        return false;
+
+    Lnode *slow = head;
+    Lnode *fast = head->next;
+
+    while (fast != nullptr && fast->next != nullptr)
+    {
+        if (slow == fast)
+            return true;
+
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+
+    return false;
+}
+
 void test01()
 {
     string s = "23415433";
@@ -193,8 +221,8 @@ signed main()
     ios::sync_with_stdio(false);
     cin.tie(0), cout.tie(0);
 
-    // solve();
-    test01();
+    solve();
+    // test01();
     // string s = "123";
     // int a = s[1] - '0';
     // cout << a;
