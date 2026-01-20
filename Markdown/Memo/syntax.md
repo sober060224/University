@@ -87,7 +87,6 @@
 ### 1. 图表（计算机/数学可视化）
 Markdown支持「Mermaid语法」，可绘制流程图、时序图、数学图表（需编辑器支持，如VS Code安装「Mermaid Markdown Syntax Highlighting」）：
 ```mermaid
-# 流程图（算法逻辑）
 graph TD
     A[开始] --> B{条件判断}
     B -->|是| C[执行操作1]
