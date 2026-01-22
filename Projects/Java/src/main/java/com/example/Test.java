@@ -51,6 +51,7 @@ class SaleWindows extends Thread {
 }
 
 public class Test {
+    // 测试01,创建一个Runnable对象和一个Thread线程，然后启动该线程。还包含了一个lambda表达式的使用方式来创建并运行一个新的线程。
     static void test01() {
         MyRunnable a = new MyRunnable();
         Thread AThread = new Thread(a);
@@ -62,6 +63,7 @@ public class Test {
         AThread.start();
     }
 
+    // 测试02,创建了两个优先级不同的线程并且开始执行它们。这样可以观察到Java的线程调度机制，高优先级的线程可能会获得更多的CPU时间片。
     static void test02() {
         Thread t1 = new Thread(new MyRunnable(), "线程A");
         Thread t2 = new Thread(new MyRunnable(), "线程B");
@@ -71,6 +73,7 @@ public class Test {
         t2.start();
     }
 
+    // 测试03和test04是关于多线程编程中的join方法的使用场景示例。Join方法是用于阻塞当前线程直至其他线程完成执行再继续运行，这里主要演示了如何在主线程中等待子线程的结束并获取其返回值的情况。
     static void test03() {
         Thread a = new Thread(new MyRunnable());
         Thread b = new Thread(new MyRunnable());
