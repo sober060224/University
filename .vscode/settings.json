@@ -52,13 +52,13 @@
   "java.format.settings.url": ".vscode/java-formatter.xml",
   "java.debug.settings.hotCodeReplace": "auto",
   "java.saveActions.organizeImports": true,
-  "java.jdt.ls.java.home": "D:\\AAA_Software\\Code",
-  "java.configuration.runtimes": [
-    {
-      "name": "JavaSE-24",
-      "path": "D:\\AAA_Software\\Code"
-    }
-  ],
+  // "java.jdt.ls.java.home": "D:\\AAA_Software\\Code\\Java",
+  // "java.configuration.runtimes": [
+  //   {
+  //     "name": "JavaSE-24",
+  //     "path": "D:\\AAA_Software\\Code\\Java"
+  //   }
+  // ],
   "editor.formatOnSave": true,
   "workbench.colorTheme": "Default Dark Modern",
   "workbench.colorCustomizations": {

@@ -1,4 +1,3 @@
-Projects/Java/src/main/java/com/Test/test01.java
 package com.Test;
 
 /**
@@ -12,6 +11,7 @@ class People {
 
     /**
      * 构造函数，初始化姓名
+     * 
      * @param name 要设置的姓名
      */
     People(String name) {
@@ -27,14 +27,16 @@ class Student extends People {
 
     /**
      * 学生构造函数，调用父类构造函数
+     * 
      * @param ooo 要设置的额外属性
      */
     public Student(String ooo) {
-        super(oo);
+        super(ooo);
     }
 
     /**
      * 获取姓名
+     * 
      * @return 返回姓名
      */
     public String getName() {
@@ -43,6 +45,7 @@ class Student extends People {
 
     /**
      * 设置姓名
+     * 
      * @param name 要设置的新姓名
      */
     public void setName(String name) {
@@ -54,7 +57,7 @@ public class test01 {
     public static void main(String[] args) {
         // 声明并初始化一维整数数组
         int[] arr2 = new int[] { 1, 2, 3 };
-        
+
         // 声明并初始化二维整数数组
         int[][] arr1 = new int[][] { { 1, 2 }, { 2, 3 } };
 
