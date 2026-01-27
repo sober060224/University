@@ -25,20 +25,15 @@ int codeBit(int a, int b, int c)
 
 void decodeBitAssist(int *num, int *x)
 {
-    for (int i = 0; i < 8; i++)
-    {
-        *x <<= 1;
-        if (*num & 1)
-            *x += 1;
-        *num >>= 1;
-    }
+    *x = (*num & ((1 << 8) - 1));
+    *num >>= 8;
 }
 
 void decodeBit(int num, int *a, int *b, int *c)
 {
     decodeBitAssist(&num, c);
     decodeBitAssist(&num, b);
-    decodeBitAssist(&num, a);
+    *a = num;
 }
 
 int main()
@@ -58,6 +53,13 @@ int main()
     int a = 0, b = 0, c = 0;
     decodeBit(132097, &a, &b, &c);
     printf("%d %d %d", a, b, c);
+
+    int **ab = (int **)malloc(sizeof(int *) * 10);
+    for (int i = 0; i < 10; i++)
+        ab[i] = (int *)malloc(sizeof(int) * 10);
+    for (int i = 0; i < 10; i++)
+        free(ab[i]);
+    free(ab);
 
     return 0;
 }
