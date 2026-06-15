@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>商品详情 - TechMart</title>
+    <link rel = "stylesheet" href = "css/product-detail.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <div style="display:flex;align-items:center;gap:20px;">
+                <a href="index.html" class="logo">
+                    <span class="logo-icon">🛒</span> TechMart
+                </a>
+                <a href="index.html" class="back-btn">← 返回商城</a>
+            </div>
+            <div class="nav-actions">
+                <a href="cart.html" class="cart-nav-btn" id="cartNavBtn">
+                    🛒 购物车
+                    <span class="cart-badge" id="cartBadge" style="display:none;">0</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 面包屑 -->
+    <div class="breadcrumb">
+        <a href="index.html">首页</a> &nbsp;›&nbsp;
+        <span id="breadcrumbCategory">商品</span> &nbsp;›&nbsp;
+        <span id="breadcrumbName" style="color:#1e293b;font-weight:500;">详情</span>
+    </div>
+
+    <!-- 详情主体 -->
+    <div class="detail-container" id="detailContainer">
+        <!-- 动态生成 -->
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // ==================== 商品数据（与列表页保持一致） ====================
+        const products = [
+            { id: 1, name: 'iPhone 15 Pro Max', price: 8999, category: '手机', image: '📱', color: '#1a1a2e',
+                badge: '热卖',
+                desc: '搭载A17 Pro芯片，钛金属设计，4800万像素主摄，支持USB-C接口。6.7英寸超视网膜XDR显示屏，ProMotion自适应刷新率技术，带来极致流畅体验。无论是专业摄影还是高强度游戏，iPhone 15 Pro Max都能轻松应对。' },
+            { id: 2, name: 'MacBook Air M3', price: 9499, category: '电脑', image: '💻', color: '#2d3436',
+                badge: '新品',
+                desc: '配备M3芯片，13.6英寸Liquid Retina显示屏，18小时超长续航。轻薄设计，重量仅1.24千克，性能强劲，满足日常办公与创意创作需求。支持两台外接显示器，工作效率倍增。' },
+            { id: 3, name: 'AirPods Pro 第二代', price: 1799, category: '耳机', image: '🎧', color: '#2c3e50',
+                badge: '热卖',
+                desc: 'H2芯片驱动，自适应降噪效果提升2倍，个性化空间音频带来沉浸式聆听体验。续航长达6小时，搭配USB-C充电盒可达30小时。IPX4抗汗抗水，适合运动佩戴。' },
+            { id: 4, name: 'Apple Watch Ultra 2', price: 5999, category: '手表', image: '⌚', color: '#e17055',
+                badge: '旗舰',
+                desc: '49mm钛金属表壳，超亮3000尼特显示屏，精准双频GPS定位。专为户外探险设计，防水深度100米，续航长达36小时。内置深度计与水温传感器，潜水爱好者的理想之选。' },
+            { id: 5, name: 'iPad Pro M4', price: 7299, category: '平板', image: '📋', color: '#6c5ce7', badge: '新品',
+                desc: 'M4芯片驱动，超薄5.1mm设计，11英寸OLED显示屏带来惊艳画质。支持Apple Pencil Pro悬浮操控，专业创作与娱乐体验全面升级。Thunderbolt接口实现高速数据传输。' },
+            { id: 6, name: 'Samsung Galaxy S24 Ultra', price: 8499, category: '手机', image: '📱', color: '#0984e3',
+                badge: '旗舰',
+                desc: '骁龙8 Gen 3处理器，2亿像素AI摄像头系统，内置S Pen。钛金属框架坚固轻盈，Galaxy AI智能功能重新定义旗舰手机体验。支持实时翻译、圈选搜索等创新功能。' },
+        ];
+
+        // ==================== 购物车工具函数 ====================
+        const CART_KEY = 'techmart_cart';
+
+        function getCart() {
+            try {
+                const data = localStorage.getItem(CART_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) { return []; }
+        }
+
+        function saveCart(cart) {
+            localStorage.setItem(CART_KEY, JSON.stringify(cart));
+            updateCartBadge();
+        }
+
+        function updateCartBadge() {
+            const cart = getCart();
+            const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+            const badge = document.getElementById('cartBadge');
+            if (badge) {
+                if (totalItems > 0) {
+                    badge.style.display = 'flex';
+                    badge.textContent = totalItems > 99 ? '99+' : totalItems;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+
+        function addToCart(product, quantity) {
+            const cart = getCart();
+            const existingIndex = cart.findIndex(item => item.id === product.id);
+            if (existingIndex >= 0) {
+                // ★ 合并同一商品
+                cart[existingIndex].quantity += quantity;
+            } else {
+                cart.push({
+                    id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    image: product.image,
+                    color: product.color,
+                    category: product.category,
+                    quantity: quantity,
+                    selected: true
+                });
+            }
+            saveCart(cart);
+        }
+
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease forwards';
+                toast.addEventListener('animationend', () => toast.remove());
+            }, 2000);
+        }
+
+        // ==================== 渲染商品详情 ====================
+        function renderDetail() {
+            const params = new URLSearchParams(window.location.search);
+            const productId = parseInt(params.get('id'));
+            const product = products.find(p => p.id === productId);
+
+            const container = document.getElementById('detailContainer');
+
+            if (!product) {
+                container.innerHTML = `
+                            <div style="grid-column:1/-1;text-align:center;padding:80px 20px;">
+                                <div style="font-size:5rem;">😕</div>
+                                <h2 style="margin-top:16px;">商品未找到</h2>
+                                <p style="color:#64748b;">请检查商品链接是否正确</p>
+                                <a href="index.html" class="btn btn-add-cart" style="display:inline-flex;margin-top:20px;text-decoration:none;">
+                                    ← 返回商城
+                                </a>
+                            </div>`;
+                document.getElementById('breadcrumbCategory').textContent = '未知';
+                document.getElementById('breadcrumbName').textContent = '商品未找到';
+                return;
+            }
+
+            // 更新面包屑
+            document.getElementById('breadcrumbCategory').textContent = product.category;
+            document.getElementById('breadcrumbName').textContent = product.name;
+
+            // 更新页面标题
+            document.title = `${product.name} - TechMart`;
+
+            container.innerHTML = `
+                        <!-- 左侧图片区 -->
+                        <div class="detail-image-area" style="background: linear-gradient(160deg, ${product.color}10, ${product.color}05);">
+                            <div class="bg-circle" style="background:${product.color};top:-40px;right:-40px;"></div>
+                            <div class="bg-circle" style="background:${product.color};bottom:-50px;left:-30px;width:200px;height:200px;"></div>
+                            <span style="position:relative;z-index:1;">${product.image}</span>
+                            ${product.badge ? `<span style="position:absolute;top:20px;left:20px;background:#f59e0b;color:#fff;font-size:0.8rem;font-weight:700;padding:5px 12px;border-radius:50px;z-index:2;">${product.badge}</span>` : ''}
+                        </div>
+
+                        <!-- 右侧信息区 -->
+                        <div class="detail-info">
+                            <div class="detail-category">📂 ${product.category}</div>
+                            <h1 class="detail-name">${product.name}</h1>
+                            <div class="detail-price"><span class="unit">¥</span>${product.price.toLocaleString()}</div>
+                            <div class="detail-meta">
+                                <span>✅ 正品保证</span>
+                                <span>🚚 全国包邮</span>
+                                <span>🔄 7天无理由退换</span>
+                                <span>🛡️ 官方保修</span>
+                            </div>
+                            <p class="detail-desc">${product.desc}</p>
+
+                            <!-- 数量选择 -->
+                            <div class="quantity-section">
+                                <span class="quantity-label">📦 购买数量：</span>
+                                <div class="quantity-control">
+                                    <button onclick="changeQuantity(-1)" aria-label="减少数量">−</button>
+                                    <input type="number" id="quantityInput" value="1" min="1" max="99" onchange="validateQuantity()">
+                                    <button onclick="changeQuantity(1)" aria-label="增加数量">+</button>
+                                </div>
+                                <span class="stock-info">（库存充足）</span>
+                            </div>
+
+                            <!-- 按钮 -->
+                            <div class="btn-group">
+                                <button class="btn btn-add-cart" onclick="addToCartFromDetail()">
+                                    🛒 加入购物车
+                                </button>
+                                <button class="btn btn-buy-now" onclick="buyNow()">
+                                    ⚡ 立即购买
+                                </button>
+                            </div>
+                        </div>
+                    `;
+        }
+
+        // ==================== 数量操作 ====================
+        function changeQuantity(delta) {
+            const input = document.getElementById('quantityInput');
+            if (!input) return;
+            let val = parseInt(input.value) || 1;
+            val = Math.max(1, Math.min(99, val + delta));
+            input.value = val;
+        }
+
+        function validateQuantity() {
+            const input = document.getElementById('quantityInput');
+            if (!input) return;
+            let val = parseInt(input.value);
+            if (isNaN(val) || val < 1) input.value = 1;
+            if (val > 99) input.value = 99;
+        }
+
+        function getSelectedQuantity() {
+            const input = document.getElementById('quantityInput');
+            return input ? Math.max(1, parseInt(input.value) || 1) : 1;
+        }
+
+        // ==================== 添加到购物车 ====================
+        function addToCartFromDetail() {
+            const params = new URLSearchParams(window.location.search);
+            const productId = parseInt(params.get('id'));
+            const product = products.find(p => p.id === productId);
+            if (!product) return;
+
+            const quantity = getSelectedQuantity();
+            addToCart(product, quantity);
+            showToast(`✅ "${product.name}" ×${quantity} 已加入购物车！`);
+        }
+
+        function buyNow() {
+            // 先添加再跳转
+            addToCartFromDetail();
+            // 短暂延迟后跳转
+            setTimeout(() => {
+                window.location.href = 'cart.html';
+            }, 400);
+        }
+
+        // ==================== 初始化 ====================
+        document.addEventListener('DOMContentLoaded', () => {
+            renderDetail();
+            updateCartBadge();
+        });
+        window.addEventListener('focus', updateCartBadge);
+        window.addEventListener('pageshow', updateCartBadge);
+    </script>
+</body>
+</html>

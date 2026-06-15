@@ -1,0 +1,193 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Inter', sans-serif;
+    background: linear-gradient(145deg, #f8faff 0%, #eef2ff 100%);
+    color: #1e293b;
+    scroll-behavior: smooth;
+}
+
+/* 科技感导航栏 */
+.navbar {
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.05);
+    padding: 0.8rem 2rem;
+    transition: all 0.3s;
+}
+
+.navbar-brand {
+    font-weight: 800;
+    font-size: 1.8rem;
+    background: linear-gradient(135deg, #1E3A8A, #3B82F6);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: -0.5px;
+}
+
+.navbar-brand i {
+    background: none;
+    -webkit-background-clip: unset;
+    color: #3B82F6;
+    margin-right: 8px;
+}
+
+.nav-link {
+    font-weight: 600;
+    margin: 0 0.2rem;
+    border-radius: 40px;
+    transition: all 0.2s;
+    color: #1e293b;
+}
+
+.nav-link:hover,
+.nav-link.active {
+    background: #3B82F6;
+    color: white !important;
+    transform: translateY(-2px);
+}
+
+/* 主内容区域 卡片风格 */
+.page-content {
+    display: none;
+    animation: fadeInUp 0.5s ease-out;
+}
+
+.page-content.active-page {
+    display: block;
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* 英雄区通用 */
+.hero-section {
+    background: linear-gradient(120deg, #0f172a 0%, #1e293b 100%);
+    border-radius: 0 0 3rem 3rem;
+    padding: 3rem 2rem;
+    margin-bottom: 2.5rem;
+    color: white;
+    box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1);
+}
+
+.hero-title {
+    font-weight: 800;
+    font-size: 2.8rem;
+    letter-spacing: -1px;
+}
+
+.hero-badge {
+    background: #3B82F6;
+    display: inline-block;
+    padding: 0.3rem 1rem;
+    border-radius: 40px;
+    font-size: 0.9rem;
+    font-weight: 500;
+}
+
+/* 卡片科技感 */
+.card-glow {
+    border: none;
+    border-radius: 28px;
+    background: rgba(255, 255, 255, 0.85);
+    backdrop-filter: blur(2px);
+    box-shadow: 0 20px 35px -12px rgba(0, 0, 0, 0.1);
+    transition: transform 0.25s ease, box-shadow 0.3s;
+    height: 100%;
+}
+
+.card-glow:hover {
+    transform: translateY(-6px);
+    box-shadow: 0 28px 40px -16px rgba(0, 0, 0, 0.2);
+    background: white;
+}
+
+.accordion-button:focus {
+    box-shadow: none;
+    border-color: #3B82F6;
+}
+
+.accordion-button:not(.collapsed) {
+    background: #eef2ff;
+    color: #1E3A8A;
+    font-weight: 700;
+}
+
+.tech-badge {
+    background: #EFF6FF;
+    color: #1E40AF;
+    padding: 0.3rem 0.8rem;
+    border-radius: 30px;
+    font-size: 0.8rem;
+    font-weight: 500;
+}
+
+footer {
+    background: #0f172a;
+    color: #cbd5e1;
+    border-radius: 2rem 2rem 0 0;
+    margin-top: 4rem;
+    padding: 2rem;
+}
+
+.list-tree {
+    list-style: none;
+    padding-left: 1rem;
+}
+
+.list-tree li {
+    margin: 0.5rem 0;
+}
+
+.list-tree i {
+    color: #3B82F6;
+    width: 1.6rem;
+}
+
+.industry-icon {
+    font-size: 2rem;
+    color: #3B82F6;
+}
+
+@media (max-width: 768px) {
+    .hero-title {
+        font-size: 2rem;
+    }
+
+    .navbar {
+        padding: 0.5rem 1rem;
+    }
+}
+
+.btn-outline-science {
+    border: 1.5px solid #3B82F6;
+    color: #3B82F6;
+    border-radius: 40px;
+    padding: 0.4rem 1.2rem;
+    font-weight: 500;
+}
+
+.btn-outline-science:hover {
+    background: #3B82F6;
+    color: white;
+}
+
+.timeline-step {
+    border-left: 3px solid #3B82F6;
+    padding-left: 1.2rem;
+    margin-bottom: 1.8rem;
+}

@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>注册 - 中华文脉</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/index.html" class="logo">中华文脉</a>
+            <ul class="nav-menu">
+                <li><a href="/index.html">首页</a></li>
+            </ul>
+            <div class="auth-buttons">
+                <a href="/login.html" class="btn btn-outline">登录</a>
+            </div>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 注册表单 -->
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2>📜 加入中华文脉</h2>
+            <div id="registerMessage" class="message"></div>
+            <form id="registerForm">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" name="username" required placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>邮箱</label>
+                    <input type="email" name="email" required placeholder="请输入邮箱">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" name="password" required placeholder="请输入密码">
+                </div>
+                <div class="form-group">
+                    <label>确认密码</label>
+                    <input type="password" name="confirmPassword" required placeholder="请再次输入密码">
+                </div>
+                <div class="form-group">
+                    <label>验证码</label>
+                    <div class="captcha-group">
+                        <input type="text" name="captcha" required placeholder="请输入验证码">
+                        <img id="captchaImage" class="captcha-image" alt="点击刷新验证码" title="点击刷新">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">注册</button>
+            </form>
+            <div class="auth-link">
+                已有账号？<a href="/login.html">立即登录</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <p>© 2026 中华文脉 - 中华优秀传统文化数字化平台</p>
+    </footer>
+
+    <script src="/js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TechMart 数码商城 - 商品列表</title>
+    <link rel = "stylesheet" href = "css/index.css">
+</head>
+<body>
+    <!-- ==================== 顶部导航 ==================== -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <a href="index.html" class="logo">
+                <span class="logo-icon">🛒</span> TechMart
+            </a>
+            <div class="nav-actions">
+                <a href="cart.html" class="cart-nav-btn" id="cartNavBtn">
+                    <span class="cart-icon">🛒</span> 购物车
+                    <span class="cart-badge" id="cartBadge" style="display:none;">0</span>
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ==================== 主内容区 ==================== -->
+    <div class="container">
+        <h1 class="page-title">📱 潮流数码商城</h1>
+        <p class="page-subtitle">精选热门数码产品，品质保证，畅享科技生活</p>
+
+        <!-- 分类筛选标签 -->
+        <div class="category-tabs" id="categoryTabs">
+            <button class="category-tab active" data-category="all">全部商品</button>
+            <button class="category-tab" data-category="手机">📱 手机</button>
+            <button class="category-tab" data-category="电脑">💻 电脑</button>
+            <button class="category-tab" data-category="耳机">🎧 耳机</button>
+            <button class="category-tab" data-category="手表">⌚ 手表</button>
+            <button class="category-tab" data-category="平板">📋 平板</button>
+        </div>
+
+        <!-- 商品网格 -->
+        <div class="product-grid" id="productGrid">
+            <!-- 动态生成 -->
+        </div>
+    </div>
+
+    <!-- Toast提示容器 -->
+    <div class="toast-container" id="toastContainer"></div>
+
+    <script>
+        // ==================== 商品数据（模拟后端数据库） ====================
+        const products = [
+            { id: 1, name: 'iPhone 15 Pro Max', price: 8999, category: '手机',
+                image: '📱', color: '#1a1a2e', badge: '热卖',
+                desc: '搭载A17 Pro芯片，钛金属设计，4800万像素主摄，支持USB-C接口。6.7英寸超视网膜XDR显示屏，ProMotion自适应刷新率技术，带来极致流畅体验。' },
+            { id: 2, name: 'MacBook Air M3', price: 9499, category: '电脑',
+                image: '💻', color: '#2d3436', badge: '新品',
+                desc: '配备M3芯片，13.6英寸Liquid Retina显示屏，18小时续航。轻薄设计，性能强劲，满足日常办公与创作需求。' },
+            { id: 3, name: 'AirPods Pro 第二代', price: 1799, category: '耳机',
+                image: '🎧', color: '#2c3e50', badge: '热卖',
+                desc: 'H2芯片驱动，自适应降噪，个性化空间音频。续航长达6小时，搭配充电盒可达30小时。支持USB-C充电。' },
+            { id: 4, name: 'Apple Watch Ultra 2', price: 5999, category: '手表',
+                image: '⌚', color: '#e17055', badge: '旗舰',
+                desc: '49mm钛金属表壳，超亮显示屏，精准双频GPS。专为户外探险设计，防水深度100米，续航长达36小时。' },
+            { id: 5, name: 'iPad Pro M4', price: 7299, category: '平板',
+                image: '📋', color: '#6c5ce7', badge: '新品',
+                desc: 'M4芯片驱动，超薄设计，11英寸OLED显示屏。支持Apple Pencil Pro，专业创作与娱乐兼顾。' },
+            { id: 6, name: 'Samsung Galaxy S24 Ultra', price: 8499, category: '手机',
+                image: '📱', color: '#0984e3', badge: '旗舰',
+                desc: '骁龙8 Gen 3处理器，2亿像素摄像头，S Pen支持。钛金属框架，AI智能功能，重新定义旗舰手机。' },
+        ];
+
+        // ==================== 购物车工具函数（使用localStorage） ====================
+        const CART_KEY = 'techmart_cart';
+
+        function getCart() {
+            try {
+                const data = localStorage.getItem(CART_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) {
+                return [];
+            }
+        }
+
+        function saveCart(cart) {
+            localStorage.setItem(CART_KEY, JSON.stringify(cart));
+            updateCartBadge();
+        }
+
+        function updateCartBadge() {
+            const cart = getCart();
+            const totalItems = cart.reduce((sum, item) => sum + item.quantity, 0);
+            const badge = document.getElementById('cartBadge');
+            if (badge) {
+                if (totalItems > 0) {
+                    badge.style.display = 'flex';
+                    badge.textContent = totalItems > 99 ? '99+' : totalItems;
+                } else {
+                    badge.style.display = 'none';
+                }
+            }
+        }
+
+        /**
+         * 添加商品到购物车（核心逻辑：合并同一商品）
+         * @param {Object} product - 商品对象
+         * @param {number} quantity - 添加数量
+         */
+        function addToCart(product, quantity = 1) {
+            const cart = getCart();
+            const existingIndex = cart.findIndex(item => item.id === product.id);
+
+            if (existingIndex >= 0) {
+                // ★ 同一商品已存在 → 合并数量
+                cart[existingIndex].quantity += quantity;
+            } else {
+                // ★ 新商品 → 新增条目，默认勾选
+                cart.push({
+                    id: product.id,
+                    name: product.name,
+                    price: product.price,
+                    image: product.image,
+                    color: product.color,
+                    category: product.category,
+                    quantity: quantity,
+                    selected: true // 默认勾选
+                });
+            }
+            saveCart(cart);
+            // 触发徽章动画
+            animateBadge();
+        }
+
+        function animateBadge() {
+            const badge = document.getElementById('cartBadge');
+            if (badge && badge.style.display !== 'none') {
+                badge.classList.remove('pulse');
+                void badge.offsetWidth; // 强制回流
+                badge.classList.add('pulse');
+            }
+        }
+
+        // ==================== Toast提示 ====================
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+
+            // 自动移除
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease forwards';
+                toast.addEventListener('animationend', () => toast.remove());
+            }, 2000);
+        }
+
+        // ==================== 渲染商品列表 ====================
+        function renderProducts(filterCategory = 'all') {
+            const grid = document.getElementById('productGrid');
+            const filtered = filterCategory === 'all' ?
+                products :
+                products.filter(p => p.category === filterCategory);
+
+            grid.innerHTML = filtered.map(p => `
+                        <div class="product-card" onclick="window.location.href='product-detail.html?id=${p.id}'">
+                            <div class="card-img" style="background: linear-gradient(145deg, ${p.color}15, ${p.color}08);">
+                                <span>${p.image}</span>
+                                ${p.badge ? `<span class="img-badge">${p.badge}</span>` : ''}
+                            </div>
+                            <div class="card-body">
+                                <div class="card-category">${p.category}</div>
+                                <div class="card-title">${p.name}</div>
+                                <div class="card-price"><span class="unit">¥</span>${p.price.toLocaleString()}</div>
+                                <div class="card-footer">
+                                    <button class="btn btn-outline btn-sm" onclick="event.stopPropagation(); viewDetail(${p.id})">
+                                        查看详情
+                                    </button>
+                                    <button class="btn btn-primary btn-sm" onclick="event.stopPropagation(); quickAdd(${p.id})">
+                                        🛒 加入购物车
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `).join('');
+        }
+
+        function viewDetail(productId) {
+            window.location.href = `product-detail.html?id=${productId}`;
+        }
+
+        function quickAdd(productId) {
+            const product = products.find(p => p.id === productId);
+            if (product) {
+                addToCart(product, 1);
+                showToast(`✅ "${product.name}" 已加入购物车`);
+            }
+        }
+
+        // ==================== 分类筛选 ====================
+        document.getElementById('categoryTabs').addEventListener('click', function(e) {
+            if (e.target.classList.contains('category-tab')) {
+                // 更新激活状态
+                document.querySelectorAll('.category-tab').forEach(tab => tab.classList.remove(
+                'active'));
+                e.target.classList.add('active');
+                // 筛选商品
+                const category = e.target.dataset.category;
+                renderProducts(category);
+            }
+        });
+
+        // ==================== 初始化 ====================
+        function init() {
+            renderProducts();
+            updateCartBadge();
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+
+        // 页面可见性变化时刷新徽标（处理从其他页面返回的情况）
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) {
+                updateCartBadge();
+            }
+        });
+        // 也监听focus事件
+        window.addEventListener('focus', updateCartBadge);
+        window.addEventListener('pageshow', updateCartBadge);
+    </script>
+</body>
+</html>

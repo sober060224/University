@@ -1,0 +1,9 @@
+<?xml version="1.0" ?>
+<LOG_ROOT>
+	<PROJECT NAME="alu">
+		<CBX_INST_ENTRY INSTANCE_NAME="|cpu|lpm_counter0:inst|lpm_counter:lpm_counter_component" CBX_FILE_NAME="cntr_9ki.tdf"/>
+		<CBX_INST_ENTRY INSTANCE_NAME="|cpu|lpm_ram_dp0:inst3|altsyncram:altsyncram_component" CBX_FILE_NAME="altsyncram_4v72.tdf"/>
+		<CBX_INST_ENTRY INSTANCE_NAME="|cpu|lpm_rom2:inst4|altsyncram:altsyncram_component" CBX_FILE_NAME="altsyncram_ml71.tdf"/>
+		<CBX_INST_ENTRY INSTANCE_NAME="|cpu|rom:inst8|lpm_rom0:inst|altsyncram:altsyncram_component" CBX_FILE_NAME="altsyncram_t971.tdf"/>
+	</PROJECT>
+</LOG_ROOT>

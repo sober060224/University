@@ -1,0 +1,239 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图书管理平台</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+
+<body>
+    <div class="container">
+        <h1>图书管理平台</h1>
+
+        <!-- 图书入库表单 -->
+        <div class="form-section">
+            <h2>图书入库</h2>
+            <form id="bookForm">
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="serialNumber">序号：</label>
+                        <input type="text" id="serialNumber" name="serialNumber" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="shelfNumber">货架号：</label>
+                        <input type="text" id="shelfNumber" name="shelfNumber" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="bookName">书名：</label>
+                        <input type="text" id="bookName" name="bookName" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="price">定价：</label>
+                        <input type="number" id="price" name="price" step="0.01" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="author">作者：</label>
+                        <input type="text" id="author" name="author" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="publishDate">出版日期：</label>
+                        <input type="date" id="publishDate" name="publishDate" required>
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="isbn">ISBN：</label>
+                        <input type="text" id="isbn" name="isbn" required>
+                    </div>
+                </div>
+
+                <button type="submit" class="btn-submit">确定</button>
+            </form>
+        </div>
+
+        <!-- 现存图书列表 -->
+        <div class="table-section">
+            <h2>现存图书列表</h2>
+            <table id="bookTable">
+                <thead>
+                    <tr>
+                        <th>序号</th>
+                        <th>货架号</th>
+                        <th>书名</th>
+                        <th>定价</th>
+                        <th>作者</th>
+                        <th>出版日期</th>
+                        <th>ISBN</th>
+                        <th>操作</th>
+                    </tr>
+                </thead>
+                <tbody id="bookTableBody">
+                    <!-- 动态添加的图书数据将显示在这里 -->
+                </tbody>
+            </table>
+            <div id="emptyMessage" class="empty-message">暂无图书数据</div>
+        </div>
+    </div>
+
+    <script>
+        // 获取DOM元素
+        const bookForm = document.getElementById('bookForm');
+        const bookTableBody = document.getElementById('bookTableBody');
+        const emptyMessage = document.getElementById('emptyMessage');
+        const bookTable = document.getElementById('bookTable');
+
+        // 初始化：检查是否有数据
+        document.addEventListener('DOMContentLoaded', function () {
+            // 可以从localStorage加载数据
+            loadBooksFromStorage();
+        });
+
+        // 表单提交事件
+        bookForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+            addBook();
+        });
+
+        // 添加图书功能
+        function addBook() {
+            // 获取表单数据
+            const serialNumber = document.getElementById('serialNumber').value.trim();
+            const shelfNumber = document.getElementById('shelfNumber').value.trim();
+            const bookName = document.getElementById('bookName').value.trim();
+            const price = document.getElementById('price').value;
+            const author = document.getElementById('author').value.trim();
+            const publishDate = document.getElementById('publishDate').value;
+            const isbn = document.getElementById('isbn').value.trim();
+
+            // 验证数据
+            if (!serialNumber || !shelfNumber || !bookName || !price || !author || !publishDate || !isbn) {
+                alert('请填写所有必填字段！');
+                return;
+            }
+
+            // 创建新行
+            const newRow = createBookRow(serialNumber, shelfNumber, bookName, price, author, publishDate, isbn);
+
+            // 添加到表格
+            bookTableBody.appendChild(newRow);
+
+            // 隐藏空消息
+            emptyMessage.style.display = 'none';
+            bookTable.style.display = 'table';
+
+            // 清空表单
+            bookForm.reset();
+
+            // 保存到localStorage
+            saveBooksToStorage();
+
+            // 提示成功
+            alert('图书添加成功！');
+        }
+
+        // 创建图书行
+        function createBookRow(serialNumber, shelfNumber, bookName, price, author, publishDate, isbn) {
+            const row = document.createElement('tr');
+
+            row.innerHTML = `
+                <td>${serialNumber}</td>
+                <td>${shelfNumber}</td>
+                <td>${bookName}</td>
+                <td>${parseFloat(price).toFixed(2)}</td>
+                <td>${author}</td>
+                <td>${publishDate}</td>
+                <td>${isbn}</td>
+                <td><button class="btn-delete" onclick="deleteBook(this)">删除</button></td>
+            `;
+
+            return row;
+        }
+
+        // 删除图书功能
+        function deleteBook(btn) {
+            if (confirm('确定要删除这条图书记录吗？')) {
+                // 获取行元素
+                const row = btn.parentNode.parentNode;
+
+                // 删除行
+                row.parentNode.removeChild(row);
+
+                // 如果表格为空，显示空消息
+                if (bookTableBody.children.length === 0) {
+                    emptyMessage.style.display = 'block';
+                    bookTable.style.display = 'none';
+                }
+
+                // 保存到localStorage
+                saveBooksToStorage();
+            }
+        }
+
+        // 保存到localStorage
+        function saveBooksToStorage() {
+            const books = [];
+            const rows = bookTableBody.getElementsByTagName('tr');
+
+            for (let row of rows) {
+                const cells = row.getElementsByTagName('td');
+                if (cells.length >= 7) {
+                    books.push({
+                        serialNumber: cells[0].textContent,
+                        shelfNumber: cells[1].textContent,
+                        bookName: cells[2].textContent,
+                        price: cells[3].textContent,
+                        author: cells[4].textContent,
+                        publishDate: cells[5].textContent,
+                        isbn: cells[6].textContent
+                    });
+                }
+            }
+
+            localStorage.setItem('books', JSON.stringify(books));
+        }
+
+        // 从localStorage加载
+        function loadBooksFromStorage() {
+            const booksData = localStorage.getItem('books');
+
+            if (booksData) {
+                const books = JSON.parse(booksData);
+
+                if (books.length > 0) {
+                    emptyMessage.style.display = 'none';
+                    bookTable.style.display = 'table';
+
+                    books.forEach(book => {
+                        const newRow = createBookRow(
+                            book.serialNumber,
+                            book.shelfNumber,
+                            book.bookName,
+                            book.price,
+                            book.author,
+                            book.publishDate,
+                            book.isbn
+                        );
+                        bookTableBody.appendChild(newRow);
+                    });
+                }
+            } else {
+                // 初始状态下隐藏表格，显示空消息
+                bookTable.style.display = 'none';
+            }
+        }
+
+        // 鼠标悬停效果（通过CSS实现，这里作为补充说明）
+        // CSS中已实现：tbody tr:hover { background-color: #e3f2fd; }
+    </script>
+</body>
+
+</html>

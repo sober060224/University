@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>登录 - 中华文脉</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body class="login-body">
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/index.html" class="logo">中华文脉</a>
+            <ul class="nav-menu">
+                <li><a href="/index.html">首页</a></li>
+            </ul>
+            <div class="auth-buttons">
+                <a href="/register.html" class="btn btn-primary">注册</a>
+            </div>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 登录表单 -->
+    <div class="auth-container">
+        <div class="auth-card">
+            <h2>🔐 登录中华文脉</h2>
+            <div id="loginMessage" class="message"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" name="username" required placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" name="password" required placeholder="请输入密码">
+                </div>
+                <div class="form-group">
+                    <label>验证码</label>
+                    <div class="captcha-group">
+                        <input type="text" name="captcha" required placeholder="请输入验证码">
+                        <img id="captchaImage" class="captcha-image" alt="点击刷新验证码" title="点击刷新">
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-primary">登录</button>
+            </form>
+            <div class="auth-link">
+                还没有账号？<a href="/register.html">立即注册</a>
+            </div>
+            <div
+                style="margin-top: 1rem; padding: 1rem; background: #f5f5f5; border-radius: 6px; font-size: 0.85rem; color: #666;">
+                <strong>测试账号：</strong><br>
+                管理员：admin / admin123
+            </div>
+        </div>
+    </div>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <p>© 2026 中华文脉 - 中华优秀传统文化数字化平台</p>
+    </footer>
+
+    <script src="/js/main.js"></script>
+</body>
+
+</html>

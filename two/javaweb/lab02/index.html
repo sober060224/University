@@ -1,0 +1,377 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <title>人工智能+ | 智创未来 全景科普</title>
+    <!-- Bootstrap 5 CSS + Icons + Google Fonts -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <link rel = "stylesheet" href = "css/style.css">
+</head>
+<body>
+
+<!-- 导航栏 - 风格统一，多级菜单语义 -->
+<nav class="navbar navbar-expand-lg sticky-top">
+    <div class="container">
+        <a class="navbar-brand" href="#">
+            <i class="fas fa-brain"></i> 人工智能+
+        </a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarMain" aria-controls="navbarMain" aria-expanded="false" aria-label="切换导航">
+            <span class="navbar-toggler-icon"></span>
+        </button>
+        <div class="collapse navbar-collapse" id="navbarMain">
+            <ul class="navbar-nav ms-auto mb-2 mb-lg-0 gap-2">
+                <li class="nav-item"><a class="nav-link active" data-page="home" href="#">首页</a></li>
+                <li class="nav-item"><a class="nav-link" data-page="concept" href="#">概念深度</a></li>
+                <li class="nav-item"><a class="nav-link" data-page="tech" href="#">技术生态</a></li>
+                <li class="nav-item"><a class="nav-link" data-page="applications" href="#">应用场景</a></li>
+                <li class="nav-item"><a class="nav-link" data-page="future" href="#">未来展望</a></li>
+            </ul>
+        </div>
+    </div>
+</nav>
+
+<main class="container py-3">
+    <!-- ================= 页面1：首页 ================= -->
+    <div id="homePage" class="page-content active-page">
+        <div class="hero-section text-center">
+            <span class="hero-badge"><i class="fas fa-microchip"></i> 新质生产力 · 国家战略引擎</span>
+            <h1 class="hero-title mt-3">“人工智能+” 行动</h1>
+            <p class="lead mt-3">技术集成 · 生态重构 · 智赋千行百业</p>
+            <p class="mt-2 opacity-75">从2024年写入政府工作报告，到2025年国务院专项意见，AI+正在重塑经济社会新形态。</p>
+        </div>
+        <div class="row g-4 mt-2">
+            <div class="col-md-4">
+                <div class="card-glow card p-4 h-100">
+                    <i class="fas fa-chart-line fa-3x text-primary mb-3"></i>
+                    <h4><i class="fas fa-bullhorn"></i> 国家战略高地</h4>
+                    <p>“人工智能+”首次写入政府工作报告，明确三阶段发展目标（2027/2030/2035），成为培育新质生产力的核心引擎。</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-glow card p-4 h-100">
+                    <i class="fas fa-sync-alt fa-3x text-primary mb-3"></i>
+                    <h4><i class="fas fa-cogs"></i> 技术融合创新</h4>
+                    <p>物联网+大模型+云计算协同，催生跨领域解决方案，推动生产生活方式智能化跃迁。</p>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="card-glow card p-4 h-100">
+                    <i class="fas fa-globe-asia fa-3x text-primary mb-3"></i>
+                    <h4><i class="fas fa-chart-pie"></i> 规模化应用</h4>
+                    <p>智能制造、医疗健康、金融服务、智慧交通、政务服务等领域已实现深度融合应用。</p>
+                </div>
+            </div>
+        </div>
+        <div class="mt-5">
+            <div class="card-glow card p-4">
+                <h3><i class="fas fa-quote-left text-primary me-2"></i> 什么是“人工智能+”？</h3>
+                <p class="mt-2 fs-5">以人工智能技术为核心驱动要素，通过技术、场景与生态深度融合，形成系统性创新范式，实现AI与经济社会各领域系统性重构，推动生产力跃迁与生产关系变革，最终形成以智能化为核心特征的经济社会发展新形态。</p>
+                <hr>
+                <div class="row text-center">
+                    <div class="col-sm-4"><i class="fas fa-database"></i> <strong>数据驱动</strong><br>多模态融合</div>
+                    <div class="col-sm-4"><i class="fas fa-brain"></i> <strong>认知智能</strong><br>大模型突破</div>
+                    <div class="col-sm-4"><i class="fas fa-robot"></i> <strong>具身智能</strong><br>人机协同</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 页面2：概念深度 (多级层次科普) ================= -->
+    <div id="conceptPage" class="page-content">
+        <div class="hero-section">
+            <h2 class="hero-title"><i class="fas fa-lightbulb"></i> 概念深度解析</h2>
+            <p>从理论溯源到战略演变，全面解读“人工智能+”的内涵与层级逻辑</p>
+        </div>
+        <div class="row">
+            <div class="col-lg-6">
+                <div class="card-glow card p-4 mb-4">
+                    <h4><i class="fas fa-layer-group text-primary"></i> 多层次概念体系</h4>
+                    <div class="accordion mt-3" id="conceptAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#collapseOne">🔹 基础层：技术核心</button></h2>
+                            <div id="collapseOne" class="accordion-collapse collapse show" data-bs-parent="#conceptAccordion">
+                                <div class="accordion-body">机器学习、深度学习、计算机视觉、自然语言处理等核心技术群，构成AI+的地基。</div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseTwo">🔸 融合层：AI+场景</button></h2>
+                            <div id="collapseTwo" class="accordion-collapse collapse" data-bs-parent="#conceptAccordion">
+                                <div class="accordion-body">AI+制造、AI+医疗、AI+金融等，技术与行业知识深度结合，重构业务流程。</div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#collapseThree">🔹 生态层：系统重构</button></h2>
+                            <div id="collapseThree" class="accordion-collapse collapse" data-bs-parent="#conceptAccordion">
+                                <div class="accordion-body">跨产业协同、标准体系、伦理治理、人才培养形成智能生态，催生新质生产力。</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-6">
+                <div class="card-glow card p-4 mb-4">
+                    <h4><i class="fas fa-timeline"></i> 历史演进与政策脉络</h4>
+                    <ul class="list-tree">
+                        <li><i class="fas fa-calendar-alt"></i> <strong>2024年</strong> — “人工智能+”首次写入政府工作报告</li>
+                        <li><i class="fas fa-calendar-alt"></i> <strong>2025年</strong> — 国务院出台《关于深入实施“人工智能+”行动的意见》</li>
+                        <li><i class="fas fa-flag-checkered"></i> <strong>2027年</strong> — 形成一批可复制推广的标杆应用</li>
+                        <li><i class="fas fa-flag-checkered"></i> <strong>2030年</strong> — 产业生态完备，成为经济增长关键引擎</li>
+                        <li><i class="fas fa-flag-checkered"></i> <strong>2035年</strong> — 智能化社会形态基本形成</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="card-glow card p-4 mt-2">
+            <h4><i class="fas fa-microphone-alt text-primary"></i> 专家观点：AI+不是简单的技术叠加</h4>
+            <p>“人工智能+”更强调系统性赋能，从辅助决策走向创造性变革，推动传统行业“换道超车”。未来十年将是AI与实体经济深度融合的黄金期。</p>
+        </div>
+    </div>
+
+    <!-- ================= 页面3：技术生态（多级层次，手风琴+嵌套列表） ================= -->
+    <div id="techPage" class="page-content">
+        <div class="hero-section">
+            <h2 class="hero-title"><i class="fas fa-microchip"></i> 技术生态全景</h2>
+            <p>协同创新 · 多级技术栈 · 从底层芯片到上层应用</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card-glow card p-4">
+                    <h4><i class="fas fa-cubes"></i> 基础技术层</h4>
+                    <ul class="list-tree mt-2">
+                        <li><i class="fas fa-microchip"></i> AI芯片（GPU/TPU/类脑芯片）</li>
+                        <li><i class="fas fa-database"></i> 大数据平台 & 数据治理</li>
+                        <li><i class="fas fa-cloud-upload-alt"></i> 云计算/边缘计算基础设施</li>
+                    </ul>
+                    <div class="mt-2"><span class="tech-badge">底层基石</span> <span class="tech-badge">算力爆发</span></div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card-glow card p-4">
+                    <h4><i class="fas fa-chalkboard-user"></i> 算法框架层</h4>
+                    <ul class="list-tree">
+                        <li><i class="fab fa-python"></i> 深度学习框架（PyTorch/TensorFlow）</li>
+                        <li><i class="fas fa-language"></i> 大模型（LLM/多模态）</li>
+                        <li><i class="fas fa-chart-line"></i> 强化学习与生成式AI</li>
+                    </ul>
+                    <div><span class="tech-badge">Transformer</span> <span class="tech-badge">扩散模型</span></div>
+                </div>
+            </div>
+            <div class="col-12">
+                <div class="card-glow card p-4">
+                    <h4><i class="fas fa-share-alt"></i> 融合技术协同体系（多级应用栈）</h4>
+                    <div class="accordion mt-3" id="techAccordion">
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button" type="button" data-bs-toggle="collapse" data-bs-target="#techOne">🏭 智能制造 · 工业AI+</button></h2>
+                            <div id="techOne" class="accordion-collapse collapse show" data-bs-parent="#techAccordion">
+                                <div class="accordion-body">工业质检、预测性维护、数字孪生、智能排产 —— 实现工厂全链条智能化。</div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#techTwo">🏥 智慧医疗 · 健康AI+</button></h2>
+                            <div id="techTwo" class="accordion-collapse collapse" data-bs-parent="#techAccordion">
+                                <div class="accordion-body">AI辅助诊断、药物研发加速、个性化治疗、医疗影像分析，提升诊疗效率。</div>
+                            </div>
+                        </div>
+                        <div class="accordion-item">
+                            <h2 class="accordion-header"><button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" data-bs-target="#techThree">🚗 智能驾驶 · 交通AI+</button></h2>
+                            <div id="techThree" class="accordion-collapse collapse" data-bs-parent="#techAccordion">
+                                <div class="accordion-body">车路协同、自动驾驶感知决策、智慧城市交通调度，重塑出行体验。</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= 页面4：应用场景 (行业多级细分) ================= -->
+    <div id="applicationsPage" class="page-content">
+        <div class="hero-section">
+            <h2 class="hero-title"><i class="fas fa-chalkboard"></i> 规模化应用场景</h2>
+            <p>“人工智能+”落地千行百业，多层级案例展示创新实践</p>
+        </div>
+        <div class="row g-4">
+            <div class="col-md-6 col-lg-4">
+                <div class="card-glow card p-4 text-center h-100">
+                    <i class="fas fa-robot industry-icon"></i>
+                    <h4 class="mt-2">智能制造</h4>
+                    <ul class="text-start mt-3 list-unstyled">
+                        <li><i class="fas fa-check-circle text-primary"></i> 智能质检（缺陷识别率99.5%）</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 工业机器人协同</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 供应链预测优化</li>
+                    </ul>
+                    <span class="badge bg-primary mt-2">标杆案例：灯塔工厂</span>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card-glow card p-4 text-center h-100">
+                    <i class="fas fa-heartbeat industry-icon"></i>
+                    <h4 class="mt-2">医疗健康</h4>
+                    <ul class="text-start mt-3 list-unstyled">
+                        <li><i class="fas fa-check-circle text-primary"></i> 肺部结节AI筛查</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 新药靶点发现</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 智能穿戴慢病管理</li>
+                    </ul>
+                    <span class="badge bg-primary mt-2">分级诊疗赋能</span>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card-glow card p-4 text-center h-100">
+                    <i class="fas fa-chart-line industry-icon"></i>
+                    <h4 class="mt-2">金融服务</h4>
+                    <ul class="text-start mt-3 list-unstyled">
+                        <li><i class="fas fa-check-circle text-primary"></i> 智能风控反欺诈</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 智能投顾</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 自动化合规审查</li>
+                    </ul>
+                    <span class="badge bg-primary mt-2">效率提升300%</span>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card-glow card p-4 text-center h-100">
+                    <i class="fas fa-tachometer-alt industry-icon"></i>
+                    <h4 class="mt-2">智慧交通</h4>
+                    <ul class="text-start mt-3 list-unstyled">
+                        <li><i class="fas fa-check-circle text-primary"></i> 信号灯智能调度</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 自动驾驶出租车</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 智慧停车诱导</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card-glow card p-4 text-center h-100">
+                    <i class="fas fa-landmark industry-icon"></i>
+                    <h4 class="mt-2">政务服务</h4>
+                    <ul class="text-start mt-3 list-unstyled">
+                        <li><i class="fas fa-check-circle text-primary"></i> 一网通办智能客服</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 政策精准推送</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 城市治理一脑统管</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="col-md-6 col-lg-4">
+                <div class="card-glow card p-4 text-center h-100">
+                    <i class="fas fa-graduation-cap industry-icon"></i>
+                    <h4 class="mt-2">智慧教育</h4>
+                    <ul class="text-start mt-3 list-unstyled">
+                        <li><i class="fas fa-check-circle text-primary"></i> AI自适应学习系统</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 虚拟教师助手</li>
+                        <li><i class="fas fa-check-circle text-primary"></i> 个性化学习路径</li>
+                    </ul>
+                </div>
+            </div>
+        </div>
+        <div class="mt-4 alert alert-light border-primary rounded-4">
+            <i class="fas fa-chart-simple text-primary me-2"></i> 据工信部数据，AI+核心产业规模已超5000亿元，带动相关产业规模数万亿，正在形成系统性经济增量。
+        </div>
+    </div>
+
+    <!-- ================= 页面5：未来展望 (多级目标与规划) ================= -->
+    <div id="futurePage" class="page-content">
+        <div class="hero-section">
+            <h2 class="hero-title"><i class="fas fa-rocket"></i> 未来展望 · 智绘蓝图</h2>
+            <p>三阶段发展战略 & 智能化社会新形态</p>
+        </div>
+        <div class="row">
+            <div class="col-lg-7">
+                <div class="card-glow card p-4">
+                    <h4><i class="fas fa-chart-line"></i> 国家级“人工智能+”发展路线图（多级目标）</h4>
+                    <div class="timeline-step mt-3">
+                        <h5>📌 第一阶段 · 2027年</h5>
+                        <p>核心产业规模突破8000亿，形成50个以上行业标杆，建成10个国家级AI+创新应用先导区。</p>
+                    </div>
+                    <div class="timeline-step">
+                        <h5>🎯 第二阶段 · 2030年</h5>
+                        <p>人工智能成为驱动现代化经济体系的核心引擎，关键技术与应用达到世界先进水平，新质生产力全面释放。</p>
+                    </div>
+                    <div class="timeline-step">
+                        <h5>🌟 第三阶段 · 2035年</h5>
+                        <p>建成具有全球竞争力的智能化社会，实现智慧城市、智慧生活、智慧治理深度融合，AI赋能共同富裕。</p>
+                    </div>
+                </div>
+            </div>
+            <div class="col-lg-5">
+                <div class="card-glow card p-4">
+                    <h4><i class="fas fa-eye"></i> 前瞻趋势</h4>
+                    <ul class="list-tree">
+                        <li><i class="fas fa-brain"></i> 通用人工智能（AGI）探索突破</li>
+                        <li><i class="fas fa-hand-holding-heart"></i> 人本AI与伦理治理体系完善</li>
+                        <li><i class="fas fa-leaf"></i> 绿色AI 降低碳足迹</li>
+                        <li><i class="fas fa-globe"></i> 全球AI治理合作与标准共建</li>
+                    </ul>
+                    <div class="mt-3 bg-light p-3 rounded-3">
+                        <i class="fas fa-quote-right"></i> “人工智能+将重新定义生产函数，未来每个人都会拥有智能助理，每个企业都将是AI增强型企业。”
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</main>
+
+<footer>
+    <div class="container text-center">
+        <div class="row">
+            <div class="col-md-6 text-md-start">
+                <h5><i class="fas fa-brain me-1"></i> 人工智能+科普平台</h5>
+                <p>智汇未来 · 创新无限 | 数据更新至2025国务院指导意见</p>
+            </div>
+            <div class="col-md-6 text-md-end">
+                <p>© 2026 广东海洋大学 Web开发技术 实验作品 | 基于 Bootstrap 5 构建</p>
+            </div>
+        </div>
+    </div>
+</footer>
+
+<!-- Bootstrap JS + Popper -->
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    // 页面切换功能 —— 实现多级子页风格统一，交互平滑
+    const pages = {
+        home: document.getElementById('homePage'),
+        concept: document.getElementById('conceptPage'),
+        tech: document.getElementById('techPage'),
+        applications: document.getElementById('applicationsPage'),
+        future: document.getElementById('futurePage')
+    };
+    const navLinks = document.querySelectorAll('.nav-link[data-page]');
+
+    function activatePage(pageId) {
+        // 隐藏所有页面
+        Object.values(pages).forEach(page => {
+            if(page) page.classList.remove('active-page');
+        });
+        // 显示选中页面
+        if(pages[pageId]) pages[pageId].classList.add('active-page');
+        // 更新导航active样式
+        navLinks.forEach(link => {
+            link.classList.remove('active');
+            if(link.getAttribute('data-page') === pageId) {
+                link.classList.add('active');
+            }
+        });
+        // 滚动至顶部
+        window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    navLinks.forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const page = link.getAttribute('data-page');
+            if(page) activatePage(page);
+            // 收起移动端导航菜单（可选体验）
+            const bsCollapse = document.querySelector('.navbar-collapse');
+            if(bsCollapse.classList.contains('show')) {
+                new bootstrap.Collapse(bsCollapse).toggle();
+            }
+        });
+    });
+
+    // 首页默认激活，如果有hash可支持扩展
+    // 兼容初始
+    if(!window.location.hash) activatePage('home');
+</script>
+</body>
+</html>

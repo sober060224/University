@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>购物车 - TechMart</title>
+    <link rel = "stylesheet" href = "css/cart.css">
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="navbar-inner">
+            <div style="display:flex;align-items:center;gap:20px;">
+                <a href="index.html" class="logo">
+                    <span class="logo-icon">🛒</span> TechMart
+                </a>
+                <a href="index.html" class="back-btn">← 继续购物</a>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主容器 -->
+    <div class="container">
+        <h1 class="page-title">🛒 我的购物车</h1>
+        <p class="page-subtitle" id="cartSummaryText">管理您的商品，确认后即可结算</p>
+
+        <!-- 购物车内容区 -->
+        <div id="cartContent">
+            <!-- 动态渲染 -->
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div class="toast-container" id="toastContainer"></div>
+    <!-- 删除确认弹窗（动态创建） -->
+    <div id="modalContainer"></div>
+
+    <script>
+        // ==================== 购物车工具函数 ====================
+        const CART_KEY = 'techmart_cart';
+
+        function getCart() {
+            try {
+                const data = localStorage.getItem(CART_KEY);
+                return data ? JSON.parse(data) : [];
+            } catch (e) { return []; }
+        }
+
+        function saveCart(cart) {
+            localStorage.setItem(CART_KEY, JSON.stringify(cart));
+            renderCart();
+        }
+
+        /**
+         * 更新购物车中某商品的数量
+         * @param {number} productId
+         * @param {number} newQuantity
+         */
+        function updateCartItemQuantity(productId, newQuantity) {
+            const cart = getCart();
+            const item = cart.find(i => i.id === productId);
+            if (item) {
+                if (newQuantity <= 0) {
+                    // 数量为0则删除
+                    removeCartItem(productId);
+                    return;
+                }
+                item.quantity = Math.min(newQuantity, 99);
+                saveCart(cart);
+            }
+        }
+
+        /**
+         * 删除购物车中的商品
+         */
+        function removeCartItem(productId) {
+            let cart = getCart();
+            cart = cart.filter(i => i.id !== productId);
+            saveCart(cart);
+            showToast('🗑️ 商品已从购物车移除', 'info');
+        }
+
+        /**
+         * 切换商品选中状态
+         */
+        function toggleItemSelection(productId) {
+            const cart = getCart();
+            const item = cart.find(i => i.id === productId);
+            if (item) {
+                item.selected = !item.selected;
+                saveCart(cart);
+            }
+        }
+
+        /**
+         * 全选/取消全选
+         */
+        function toggleSelectAll(selectAll) {
+            const cart = getCart();
+            cart.forEach(item => {
+                item.selected = selectAll;
+            });
+            saveCart(cart);
+        }
+
+        /**
+         * ★ 计算选中商品的总价
+         * @returns {{totalQuantity: number, totalPrice: number, selectedCount: number}}
+         */
+        function calculateSelectedTotal() {
+            const cart = getCart();
+            let totalQuantity = 0;
+            let totalPrice = 0;
+            let selectedCount = 0;
+            cart.forEach(item => {
+                if (item.selected) {
+                    totalQuantity += item.quantity;
+                    totalPrice += item.price * item.quantity;
+                    selectedCount++;
+                }
+            });
+            return { totalQuantity, totalPrice, selectedCount, totalItems: cart.length };
+        }
+
+        // ==================== Toast ====================
+        function showToast(message, type = 'info') {
+            const container = document.getElementById('toastContainer');
+            const toast = document.createElement('div');
+            toast.className = `toast ${type}`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => {
+                toast.style.animation = 'slideOut 0.3s ease forwards';
+                toast.addEventListener('animationend', () => toast.remove());
+            }, 2000);
+        }
+
+        // ==================== 删除确认弹窗 ====================
+        function showDeleteConfirm(productId, productName) {
+            const modalContainer = document.getElementById('modalContainer');
+            modalContainer.innerHTML = `
+                        <div class="modal-overlay" id="modalOverlay" onclick="closeModal()">
+                            <div class="modal-dialog" onclick="event.stopPropagation()">
+                                <h3>🗑️ 确认删除</h3>
+                                <p>确定要从购物车中移除<br><strong>"${productName}"</strong> 吗？</p>
+                                <div class="modal-buttons">
+                                    <button class="btn btn-outline btn-sm" onclick="closeModal()">取消</button>
+                                    <button class="btn btn-primary btn-sm" style="background:#ef4444;" onclick="confirmDelete(${productId})">确认删除</button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+        }
+
+        function closeModal() {
+            document.getElementById('modalContainer').innerHTML = '';
+        }
+
+        function confirmDelete(productId) {
+            closeModal();
+            removeCartItem(productId);
+        }
+
+        // ==================== 渲染购物车 ====================
+        function renderCart() {
+            const cart = getCart();
+            const cartContent = document.getElementById('cartContent');
+            const summaryText = document.getElementById('cartSummaryText');
+            const { totalQuantity, totalPrice, selectedCount, totalItems } = calculateSelectedTotal();
+
+            // 更新摘要文字
+            if (totalItems === 0) {
+                summaryText.textContent = '购物车空空如也，快去挑选心仪的商品吧~';
+            } else {
+                summaryText.textContent =
+                    `共 ${totalItems} 件商品，已勾选 ${selectedCount} 件 | 管理您的商品，确认后即可结算`;
+            }
+
+            // 空购物车
+            if (cart.length === 0) {
+                cartContent.innerHTML = `
+                            <div class="empty-cart">
+                                <div class="empty-icon">🛒</div>
+                                <h2>购物车是空的</h2>
+                                <p>快去商城挑选您喜欢的数码产品吧！</p>
+                                <a href="index.html" class="btn btn-primary">🏪 去逛逛</a>
+                            </div>
+                        `;
+                return;
+            }
+
+            // 判断是否全选
+            const allSelected = cart.every(item => item.selected);
+            const someSelected = cart.some(item => item.selected) && !allSelected;
+
+            // 构建表格
+            let tableHTML = `
+                        <div class="cart-table-wrapper">
+                            <table class="cart-table">
+                                <thead>
+                                    <tr>
+                                        <th style="width:50px;text-align:center;">
+                                            <span class="checkbox-wrap">
+                                                <input type="checkbox" id="selectAllCheckbox" ${allSelected ? 'checked' : ''} onchange="handleSelectAll(this.checked)">
+                                            </span>
+                                        </th>
+                                        <th>商品信息</th>
+                                        <th style="width:100px;">单价</th>
+                                        <th style="width:140px;">数量</th>
+                                        <th style="width:110px;">小计</th>
+                                        <th style="width:80px;">操作</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${cart.map(item => `
+                                        <tr>
+                                            <td style="text-align:center;">
+                                                <span class="checkbox-wrap">
+                                                    <input type="checkbox" ${item.selected ? 'checked' : ''} onchange="toggleItemSelection(${item.id})" class="item-checkbox">
+                                                </span>
+                                            </td>
+                                            <td>
+                                                <div class="cart-product-info">
+                                                    <div class="cart-product-img" style="background:${item.color || '#e8eef5'}15; border-color:${item.color || '#e2e8f0'}30;">
+                                                        ${item.image || '📦'}
+                                                    </div>
+                                                    <div>
+                                                        <div class="cart-product-name">${item.name}</div>
+                                                        <div class="cart-product-cat">${item.category || ''}</div>
+                                                    </div>
+                                                </div>
+                                            </td>
+                                            <td><span class="unit-price">¥${item.price.toLocaleString()}</span></td>
+                                            <td>
+                                                <div class="qty-control">
+                                                    <button onclick="changeCartQty(${item.id}, -1)" aria-label="减少">−</button>
+                                                    <span>${item.quantity}</span>
+                                                    <button onclick="changeCartQty(${item.id}, 1)" aria-label="增加">+</button>
+                                                </div>
+                                            </td>
+                                            <td><span class="subtotal">¥${(item.price * item.quantity).toLocaleString()}</span></td>
+                                            <td>
+                                                <button class="btn btn-danger btn-sm" onclick="showDeleteConfirm(${item.id}, '${item.name.replace(/'/g, "\\'")}')">
+                                                    🗑️ 删除
+                                                </button>
+                                            </td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        </div>
+
+                        <!-- ★ 底部结算栏 -->
+                        <div class="cart-footer">
+                            <label class="select-all-wrap" onclick="event.preventDefault(); handleSelectAll(!${allSelected})">
+                                <input type="checkbox" id="selectAllCheckbox2" ${allSelected ? 'checked' : ''} onchange="handleSelectAll(this.checked)">
+                                <span>全选（${selectedCount}/${totalItems}）</span>
+                            </label>
+                            <div class="footer-summary">
+                                <span class="summary-text">
+                                    已勾选 <strong>${totalQuantity}</strong> 件商品
+                                </span>
+                                <span style="color:#64748b;">合计：</span>
+                                <span class="total-price"><span class="unit">¥</span>${totalPrice.toLocaleString()}</span>
+                            </div>
+                            <button class="btn-checkout" id="btnCheckout" ${selectedCount === 0 ? 'disabled' : ''} onclick="checkout()">
+                                💳 立即结算 (${selectedCount}件)
+                            </button>
+                        </div>
+                    `;
+
+            cartContent.innerHTML = tableHTML;
+
+            // 同步两个全选复选框
+            syncSelectAllCheckboxes();
+        }
+
+        function syncSelectAllCheckboxes() {
+            const cart = getCart();
+            const allSelected = cart.length > 0 && cart.every(item => item.selected);
+            const cb1 = document.getElementById('selectAllCheckbox');
+            const cb2 = document.getElementById('selectAllCheckbox2');
+            if (cb1) cb1.checked = allSelected;
+            if (cb2) cb2.checked = allSelected;
+        }
+
+        function handleSelectAll(checked) {
+            toggleSelectAll(checked);
+            syncSelectAllCheckboxes();
+        }
+
+        function changeCartQty(productId, delta) {
+            const cart = getCart();
+            const item = cart.find(i => i.id === productId);
+            if (item) {
+                const newQty = item.quantity + delta;
+                updateCartItemQuantity(productId, newQty);
+            }
+        }
+
+        // ==================== 结算 ====================
+        function checkout() {
+            const { totalQuantity, totalPrice, selectedCount } = calculateSelectedTotal();
+            if (selectedCount === 0) {
+                showToast('⚠️ 请至少选择一件商品进行结算', 'info');
+                return;
+            }
+            const confirmMsg = `确认结算以下商品？\n\n勾选商品：${selectedCount} 种\n总计数量：${totalQuantity} 件\n合计金额：¥${totalPrice.toLocaleString()}\n\n（演示页面，不会实际扣款）`;
+            if (confirm(confirmMsg)) {
+                showToast(`✅ 订单已提交！总计 ¥${totalPrice.toLocaleString()}（演示）`, 'info');
+                // 结算后清除购物车中已勾选的商品（可选）
+                // 这里保留商品，仅做提示
+            }
+        }
+
+        // ==================== 初始化 ====================
+        function init() {
+            renderCart();
+        }
+
+        document.addEventListener('DOMContentLoaded', init);
+
+        // 从其他页面返回时刷新
+        window.addEventListener('focus', renderCart);
+        window.addEventListener('pageshow', renderCart);
+        document.addEventListener('visibilitychange', () => {
+            if (!document.hidden) renderCart();
+        });
+
+        // 点击弹窗遮罩关闭
+        document.getElementById('modalContainer').addEventListener('click', function(e) {
+            if (e.target.id === 'modalOverlay') {
+                closeModal();
+            }
+        });
+
+        // 键盘ESC关闭弹窗
+        document.addEventListener('keydown', function(e) {
+            if (e.key === 'Escape') closeModal();
+        });
+    </script>
+</body>
+</html>

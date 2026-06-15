@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>文章详情 - 中华文脉</title>
+    <link rel="stylesheet" href="/css/style.css">
+</head>
+
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="nav-container">
+            <a href="/index.html" class="logo">中华文脉</a>
+            <ul class="nav-menu">
+                <li><a href="/index.html">首页</a></li>
+                <li><a href="/classics.html">经典典籍</a></li>
+                <li><a href="/ich.html">非遗传承</a></li>
+                <li><a href="/art.html">翰墨丹青</a></li>
+                <li><a href="/music.html">礼乐风雅</a></li>
+                <li><a href="/tech.html">传统科技</a></li>
+            </ul>
+            <div class="auth-buttons">
+                <a href="/login.html" class="btn btn-outline">登录</a>
+                <a href="/register.html" class="btn btn-primary">注册</a>
+            </div>
+            <div class="hamburger">
+                <span></span>
+                <span></span>
+                <span></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- 主内容 -->
+    <main class="container">
+        <article class="article-detail">
+            <h1 id="articleTitle">文章标题</h1>
+            <div class="meta">
+                <span id="articleAuthor">作者</span>
+            </div>
+            <div id="articleContent" class="article-content">
+                文章内容加载中...
+            </div>
+            <div id="articleSource" class="article-source">
+                来源：本站整理
+            </div>
+
+            <!-- 互动区域 -->
+            <div class="interaction-bar">
+                <button id="likeBtn" class="interaction-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path
+                            d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z">
+                        </path>
+                    </svg>
+                    点赞 <span id="likeCount">0</span>
+                </button>
+                <div class="interaction-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                    </svg>
+                    评论 <span id="commentCount">0</span>
+                </div>
+                <button id="shareBtn" class="interaction-btn">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="18" cy="5" r="3"></circle>
+                        <circle cx="6" cy="12" r="3"></circle>
+                        <circle cx="18" cy="19" r="3"></circle>
+                        <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"></line>
+                        <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"></line>
+                    </svg>
+                    转发
+                </button>
+            </div>
+
+            <!-- 评论区 -->
+            <div class="comment-section">
+                <h3>💬 发表评论</h3>
+                <form id="commentForm" class="comment-form">
+                    <textarea id="commentContent" placeholder="分享你的见解..." required></textarea>
+                    <button type="submit" class="btn btn-primary">发表评论</button>
+                </form>
+
+                <h3 style="margin-top: 2rem;">📝 评论列表</h3>
+                <div id="commentList" class="comment-list">
+                    <div style="text-align: center; padding: 2rem;">
+                        <div class="loading"></div>
+                        <p style="margin-top: 1rem; color: #888;">加载评论中...</p>
+                    </div>
+                </div>
+            </div>
+        </article>
+    </main>
+
+    <!-- 页脚 -->
+    <footer class="footer">
+        <p>© 2026 中华文脉 - 中华优秀传统文化数字化平台</p>
+    </footer>
+
+    <script src="/js/main.js"></script>
+</body>
+
+</html>

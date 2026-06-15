@@ -1,0 +1,6 @@
+<?xml version="1.0" ?>
+<LOG_ROOT>
+	<PROJECT NAME="CPU">
+		<CBX_INST_ENTRY INSTANCE_NAME="|PC|lpm_counter1:inst|lpm_counter:lpm_counter_component" CBX_FILE_NAME="cntr_uui.tdf"/>
+	</PROJECT>
+</LOG_ROOT>

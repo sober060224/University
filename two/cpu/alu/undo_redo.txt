@@ -1,0 +1,78 @@
+GED
+
+	Undo Commands
+	     1.	Move
+	     2.	Move
+	     3.	Update Symbol or Block
+
+
+RPW
+
+	Undo Commands
+	     1.	||Compilation Report||Flow Summary
+
+
+WED
+
+	Undo Commands
+	     1.	Clock
+	     2.	Clock
+	     3.	Insert Node or Bus
+	     4.	Delete Node, Bus or Waveform Divider
+	     5.	Clock
+	     6.	Clock
+
+
+RPW
+
+	Undo Commands
+	     1.	||Simulation Report||Simulator||Simulation Waveforms
+
+
+GED
+
+	Undo Commands
+	     1.	Properties
+	     2.	Properties
+	     3.	Properties
+	     4.	Properties
+	     5.	Properties
+	     6.	Properties
+	     7.	Properties
+	     8.	Properties
+	     9.	Properties
+	    10.	Properties
+	    11.	Move
+	    12.	Move
+	    13.	Move
+	    14.	Move
+	    15.	Move
+	    16.	Move
+	    17.	Move
+	    18.	Delete
+	    19.	Insert Node
+	    20.	Move
+	    21.	Move
+	    22.	Move
+	    23.	Move
+	    24.	Paste
+	    25.	Insert Symbol
+	    26.	Paste
+	    27.	Paste
+	    28.	Move
+	    29.	Paste
+	    30.	Move
+	    31.	Paste
+	    32.	Move
+	    33.	Paste
+	    34.	Move
+	    35.	Paste
+	    36.	Move
+	    37.	Paste
+	    38.	Insert Symbol
+	    39.	Delete
+	    40.	Insert Bus
+	    41.	Move
+	    42.	Paste
+
+

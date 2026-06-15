@@ -1,0 +1,578 @@
+:root {
+    --primary: #2563eb;
+    --primary-dark: #1d4ed8;
+    --primary-light: #dbeafe;
+    --accent: #f59e0b;
+    --bg: #f8fafc;
+    --card-bg: #ffffff;
+    --text: #1e293b;
+    --text-light: #64748b;
+    --border: #e2e8f0;
+    --danger: #ef4444;
+    --danger-light: #fef2f2;
+    --success: #10b981;
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.05);
+    --shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05);
+    --shadow-md: 0 10px 25px -5px rgba(0, 0, 0, 0.08), 0 4px 10px -6px rgba(0, 0, 0, 0.04);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --transition: 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Microsoft YaHei', sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.6;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+}
+
+/* 导航栏 */
+.navbar {
+    background: var(--card-bg);
+    border-bottom: 1px solid var(--border);
+    position: sticky;
+    top: 0;
+    z-index: 1000;
+    box-shadow: var(--shadow-sm);
+}
+
+.navbar-inner {
+    max-width: 1280px;
+    margin: 0 auto;
+    padding: 0 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 64px;
+}
+
+.logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    color: var(--text);
+    font-weight: 700;
+    font-size: 1.4rem;
+    letter-spacing: -0.5px;
+}
+
+.logo-icon {
+    width: 40px;
+    height: 40px;
+    background: linear-gradient(135deg, #2563eb, #3b82f6);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #fff;
+    font-size: 1.3rem;
+}
+
+.back-btn {
+    color: var(--text-light);
+    text-decoration: none;
+    font-weight: 500;
+    font-size: 0.95rem;
+    transition: color var(--transition);
+}
+
+.back-btn:hover {
+    color: var(--primary);
+}
+
+/* 主容器 */
+.container {
+    max-width: 1100px;
+    margin: 0 auto;
+    padding: 32px 24px 60px;
+}
+
+.page-title {
+    font-size: 1.8rem;
+    font-weight: 700;
+    margin-bottom: 6px;
+    letter-spacing: -0.5px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.page-subtitle {
+    color: var(--text-light);
+    margin-bottom: 28px;
+    font-size: 0.9rem;
+}
+
+/* 空购物车 */
+.empty-cart {
+    text-align: center;
+    padding: 80px 20px;
+    background: #fff;
+    border-radius: var(--radius);
+    border: 2px dashed var(--border);
+}
+
+.empty-cart .empty-icon {
+    font-size: 6rem;
+    margin-bottom: 16px;
+}
+
+.empty-cart h2 {
+    margin-bottom: 8px;
+    font-weight: 700;
+}
+
+.empty-cart p {
+    color: var(--text-light);
+    margin-bottom: 20px;
+}
+
+.btn {
+    padding: 12px 24px;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    font-size: 0.95rem;
+    font-weight: 600;
+    transition: all var(--transition);
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    justify-content: center;
+    text-decoration: none;
+    letter-spacing: 0.3px;
+}
+
+.btn-primary {
+    background: var(--primary);
+    color: #fff;
+}
+
+.btn-primary:hover {
+    background: var(--primary-dark);
+    transform: translateY(-1px);
+    box-shadow: 0 6px 18px rgba(37, 99, 235, 0.3);
+}
+
+.btn-outline {
+    background: #fff;
+    color: var(--primary);
+    border: 1.5px solid var(--primary);
+}
+
+.btn-outline:hover {
+    background: var(--primary-light);
+}
+
+.btn-danger {
+    background: #fff;
+    color: var(--danger);
+    border: 1.5px solid #fecaca;
+    font-size: 0.82rem;
+    padding: 7px 14px;
+}
+
+.btn-danger:hover {
+    background: var(--danger-light);
+    border-color: var(--danger);
+}
+
+.btn-sm {
+    padding: 6px 12px;
+    font-size: 0.8rem;
+}
+
+/* 购物车表格 */
+.cart-table-wrapper {
+    background: #fff;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.cart-table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.cart-table thead {
+    background: #f8fafc;
+    border-bottom: 2px solid var(--border);
+}
+
+.cart-table th {
+    padding: 14px 16px;
+    text-align: left;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-light);
+    letter-spacing: 0.3px;
+    white-space: nowrap;
+}
+
+.cart-table td {
+    padding: 16px;
+    vertical-align: middle;
+    border-bottom: 1px solid var(--border);
+}
+
+.cart-table tbody tr {
+    transition: background var(--transition);
+}
+
+.cart-table tbody tr:hover {
+    background: #fafcfd;
+}
+
+.cart-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+/* 复选框样式 */
+.checkbox-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.checkbox-wrap input[type="checkbox"] {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+/* 商品信息 */
+.cart-product-info {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+}
+
+.cart-product-img {
+    width: 70px;
+    height: 70px;
+    border-radius: var(--radius-sm);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 2.5rem;
+    flex-shrink: 0;
+    border: 1px solid var(--border);
+}
+
+.cart-product-name {
+    font-weight: 600;
+    font-size: 0.95rem;
+    line-height: 1.3;
+}
+
+.cart-product-cat {
+    font-size: 0.75rem;
+    color: var(--text-light);
+}
+
+/* 数量控制 */
+.qty-control {
+    display: inline-flex;
+    align-items: center;
+    border: 1.5px solid var(--border);
+    border-radius: 50px;
+    overflow: hidden;
+    background: #fff;
+}
+
+.qty-control button {
+    width: 32px;
+    height: 32px;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text);
+    transition: all var(--transition);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qty-control button:hover {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+.qty-control span {
+    width: 40px;
+    text-align: center;
+    font-weight: 700;
+    font-size: 0.9rem;
+    background: #fafbfc;
+    line-height: 32px;
+    user-select: none;
+}
+
+.unit-price {
+    font-weight: 600;
+    color: var(--text);
+    white-space: nowrap;
+}
+
+.subtotal {
+    font-weight: 700;
+    color: #e03131;
+    font-size: 1.05rem;
+    white-space: nowrap;
+}
+
+/* 底部结算栏 */
+.cart-footer {
+    background: #fff;
+    border-radius: var(--radius);
+    border: 1px solid var(--border);
+    margin-top: 20px;
+    padding: 20px 24px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    box-shadow: var(--shadow-sm);
+    position: sticky;
+    bottom: 20px;
+}
+
+.select-all-wrap {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    cursor: pointer;
+    user-select: none;
+}
+
+.select-all-wrap input {
+    width: 18px;
+    height: 18px;
+    accent-color: var(--primary);
+    cursor: pointer;
+}
+
+.footer-summary {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    flex-wrap: wrap;
+}
+
+.summary-text {
+    font-size: 0.9rem;
+    color: var(--text-light);
+}
+
+.summary-text strong {
+    color: var(--text);
+    font-size: 1rem;
+}
+
+.total-price {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: #e03131;
+    letter-spacing: -1px;
+}
+
+.total-price .unit {
+    font-size: 1rem;
+}
+
+.btn-checkout {
+    background: #e03131;
+    color: #fff;
+    padding: 14px 32px;
+    font-size: 1rem;
+    border-radius: 50px;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+    transition: all var(--transition);
+    white-space: nowrap;
+    letter-spacing: 0.3px;
+}
+
+.btn-checkout:hover {
+    background: #c53030;
+    transform: translateY(-2px);
+    box-shadow: 0 8px 22px rgba(224, 49, 49, 0.35);
+}
+
+.btn-checkout:disabled {
+    background: #cbd5e1;
+    cursor: not-allowed;
+    box-shadow: none;
+    transform: none;
+}
+
+/* 删除确认弹窗 */
+.modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.45);
+    z-index: 2000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: fadeIn 0.2s ease;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+
+    to {
+        opacity: 1;
+    }
+}
+
+.modal-dialog {
+    background: #fff;
+    border-radius: var(--radius);
+    padding: 28px;
+    max-width: 420px;
+    width: 90%;
+    box-shadow: 0 25px 50px rgba(0, 0, 0, 0.2);
+    text-align: center;
+}
+
+.modal-dialog h3 {
+    margin-bottom: 10px;
+    font-size: 1.2rem;
+}
+
+.modal-dialog p {
+    color: var(--text-light);
+    margin-bottom: 20px;
+    font-size: 0.9rem;
+}
+
+.modal-buttons {
+    display: flex;
+    gap: 10px;
+    justify-content: center;
+}
+
+/* Toast */
+.toast-container {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.toast {
+    background: #1e293b;
+    color: #fff;
+    padding: 14px 20px;
+    border-radius: 10px;
+    font-weight: 500;
+    font-size: 0.9rem;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.25);
+    animation: slideIn 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    max-width: 380px;
+}
+
+.toast.info {
+    border-left: 4px solid #3b82f6;
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateX(60px);
+    }
+
+    to {
+        opacity: 1;
+        transform: translateX(0);
+    }
+}
+
+@keyframes slideOut {
+    from {
+        opacity: 1;
+        transform: translateX(0);
+    }
+
+    to {
+        opacity: 0;
+        transform: translateX(60px);
+    }
+}
+
+/* 响应式 */
+@media (max-width: 768px) {
+    .cart-table thead {
+        display: none;
+    }
+
+    .cart-table tbody tr {
+        display: flex;
+        flex-wrap: wrap;
+        padding: 12px;
+        border-bottom: 1px solid var(--border);
+        gap: 8px;
+        align-items: center;
+    }
+
+    .cart-table td {
+        padding: 6px 8px;
+        border-bottom: none;
+    }
+
+    .cart-table td:first-child {
+        order: -1;
+    }
+
+    .cart-product-img {
+        width: 50px;
+        height: 50px;
+        font-size: 1.8rem;
+    }
+
+    .cart-footer {
+        flex-direction: column;
+        align-items: stretch;
+        text-align: center;
+    }
+
+    .footer-summary {
+        justify-content: center;
+    }
+
+    .navbar-inner {
+        padding: 0 14px;
+        height: 56px;
+    }
+
+    .container {
+        padding: 16px 10px 40px;
+    }
+}
