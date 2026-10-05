@@ -1,0 +1,7 @@
+# 依赖与构建产物
+node_modules/
+target/
+dist/
+
+# Maven Wrapper 的 jar（wrapper 脚本与 properties 保留在库）
+.mvn/wrapper/maven-wrapper.jar

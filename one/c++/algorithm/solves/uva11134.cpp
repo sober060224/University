@@ -65,7 +65,7 @@ int main()
              { return a.e < b.e; });
 
         vector<int> ax = solve(x), ay = solve(y);
-        
+
         if (ax == vector<int>(1, -1) || ay == vector<int>(1, -1))
             cout << "IMPOSSIBLE" << endl;
         else

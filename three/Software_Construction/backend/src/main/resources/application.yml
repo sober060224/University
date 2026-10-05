@@ -1,0 +1,68 @@
+server:
+  # 8080 常被本机的 qBittorrent 等工具占用，这里用 8088
+  port: 8088
+  servlet:
+    session:
+      timeout: 2h
+
+spring:
+  application:
+    name: marine-bio-backend
+  datasource:
+    # 连接字符集必须写 Java 字符集名 UTF-8（Connector/J 会映射到服务端的 utf8mb4）。
+    # 写成 utf8 会被当作 utf8mb3，4 字节字符（emoji、部分生僻字）插入失败；
+    # 也不能写 utf8mb4，驱动不认这个名字，会直接抛 Unsupported character encoding。
+    # allowPublicKeyRetrieval 与 useSSL=false 是一对：MySQL 8 默认用 caching_sha2_password，
+    # 明文连接下客户端要去服务端取 RSA 公钥，不开这个开关会直接连不上。
+    # 要彻底去掉它就得配上 TLS（useSSL=true 并信任服务端证书），本项目只在本机跑，不做。
+    url: jdbc:mysql://localhost:3306/marine_biodiv?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${DB_USERNAME:root}
+    # 密码不写死在仓库里，优先读环境变量 DB_PASSWORD，没设置时退回本机默认口令
+    password: ${DB_PASSWORD:Chenweisheng.1}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      maximum-pool-size: 10
+      connection-timeout: 10000
+  jpa:
+    hibernate:
+      # 表结构由 database.sql 维护，这里只做校验，不自动改表
+      ddl-auto: validate
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+    show-sql: false
+  servlet:
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 10MB
+  jackson:
+    # LocalDateTime 按 ISO-8601 输出（2026-09-30T15:35:25），
+    # 前端 new Date(...) 可直接解析；date-format 只对 java.util.Date 生效，这里不用
+    serialization:
+      write-dates-as-timestamps: false
+    time-zone: Asia/Shanghai
+  web:
+    resources:
+      # 静态资源与前端打包产物改由 WebConfig 统一注册（关闭自动映射，避免 /** 重复注册导致 SPA 兜底失效）
+      add-mappings: false
+
+# 图片上传目录（相对 jar 启动目录）
+app:
+  upload-dir: ./uploads
+
+# 模块五：阿里云百炼 DashScope
+# API Key 只保存在后端配置中，不会下发到前端（满足非功能性需求：API Key 需在本地存储）
+ai:
+  # 同样走环境变量，避免把真实 Key 提交进仓库
+  api-key: ${AI_API_KEY:sk-请填写}
+  base-url: https://llm-kp0ysm1s5yjgc8lf.cn-beijing.maas.aliyuncs.com/compatible-mode/v1 # https://dashscope.aliyuncs.com/compatible-mode/v1
+  vision-model: qwen-vl-max
+  text-model: qwen-plus
+  connect-timeout-ms: 5000
+  read-timeout-ms: 30000
+  max-retry: 2
+
+logging:
+  level:
+    com.gdou.marinebio: INFO
