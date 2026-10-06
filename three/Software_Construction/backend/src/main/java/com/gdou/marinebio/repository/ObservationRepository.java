@@ -53,10 +53,15 @@ public interface ObservationRepository extends JpaRepository<Observation, Intege
     @Query(value = "select date_format(observe_time, '%Y-%m') as ym, count(*) as c from observations group by ym order by ym", nativeQuery = true)
     List<Object[]> countByMonth();
 
+    /**
+     * 各观测人员 Top10。
+     * group by 必须带上 u.id：只按 real_name 分组会把同名的两个人合并成一根柱子，
+     * 统计出的人数和条数都不是真的。order by 补 u.id 是为了让并列时结果稳定。
+     */
     @Query(value = """
-            select coalesce(u.real_name, '未知人员') as name, count(*) as c
-            from observations o left join users u on u.id = o.observer_id
-            group by u.real_name order by c desc limit 10
+        select coalesce(u.real_name, '未知人员') as name, count(*) as c
+        from observations o left join users u on u.id = o.observer_id
+        group by u.id, u.real_name order by c desc, u.id limit 10
             """, nativeQuery = true)
     List<Object[]> countByObserver();
 

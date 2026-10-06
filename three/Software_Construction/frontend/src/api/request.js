@@ -24,11 +24,14 @@ request.interceptors.response.use(
         return body
     },
     error => {
-        // 未登录（或会话过期）时后端返回 401，清空本地状态并跳回登录页
+        // 未登录（或会话过期）时后端返回 401，清空本地状态并跳回登录页。
+        // 必须带上 redirect：否则用户在某个页面被踢下线后，登录成功只会回到看板，
+        // 得自己重新找回去。LoginView 已经会读这个参数。
         if (error.response && error.response.status === 401) {
             useUserStore().clear()
             if (window.location.pathname !== '/login') {
-                window.location.href = '/login'
+                const back = encodeURIComponent(window.location.pathname + window.location.search)
+                window.location.href = `/login?redirect=${back}`
             }
         }
         const message = (error.response && error.response.data && error.response.data.message)

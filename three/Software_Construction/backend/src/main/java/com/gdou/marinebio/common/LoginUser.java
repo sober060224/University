@@ -2,6 +2,7 @@ package com.gdou.marinebio.common;
 
 import com.gdou.marinebio.entity.Role;
 import com.gdou.marinebio.entity.User;
+import com.gdou.marinebio.entity.UserStatus;
 import lombok.Getter;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
@@ -23,6 +24,13 @@ public class LoginUser implements UserDetails {
     private final String password;
     private final String realName;
     private final Role role;
+    /**
+     * 登录那一刻的凭据版本号与账号状态快照。会话本身活 2 小时，
+     * 期间用户改密码、被降权、被停用都不会反映到已经持有的会话上，
+     * 所以 SessionFreshnessFilter 每次请求都要拿它和库里的当前值比一次。
+     */
+    private final Integer credentialVersion;
+    private final UserStatus status;
 
     public LoginUser(User user) {
         this.id = user.getId();
@@ -30,6 +38,8 @@ public class LoginUser implements UserDetails {
         this.password = user.getPassword();
         this.realName = user.getRealName();
         this.role = user.getRole();
+        this.credentialVersion = user.getCredentialVersion();
+        this.status = user.getStatus();
     }
 
     @Override

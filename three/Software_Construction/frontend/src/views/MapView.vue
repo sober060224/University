@@ -58,10 +58,13 @@ function renderObservations(points) {
     // 观测地图接口里的 ecosystem 是生态系统名字符串，不是对象
     if (p.ecosystem && !names.includes(p.ecosystem)) names.push(p.ecosystem)
   })
-  legend.value = names.map(name => ({ name, color: ECO_COLORS[names.indexOf(name) % ECO_COLORS.length] }))
+  // 未指定生态系统不在 names 里，indexOf 返回 -1，取模会得到 -1 而非合法下标，
+  // 那样颜色是 undefined。所以这里统一归一化成非负下标。
+  const colorOf = (eco) => ECO_COLORS[((names.indexOf(eco) % ECO_COLORS.length) + ECO_COLORS.length) % ECO_COLORS.length]
+  legend.value = names.map(name => ({ name, color: colorOf(name) }))
   points.forEach(p => {
     const eco = p.ecosystem || '未指定'
-    const color = ECO_COLORS[names.indexOf(eco) % ECO_COLORS.length]
+    const color = colorOf(eco)
     L.circleMarker([p.latitude, p.longitude], {
       radius: 9, color, weight: 2, fillColor: color, fillOpacity: 0.6
     }).bindPopup(`

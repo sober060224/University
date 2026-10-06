@@ -11,8 +11,10 @@ import jakarta.validation.constraints.Size;
 import java.util.List;
 
 /**
- * 模块二、模块三的请求体。
- * 新增用 @NotNull/@NotBlank 标注必填项，修改时不加约束以支持按字段局部更新。
+     * 模块二、模块三的请求体。
+     * 增改共用同一份表单记录，POST 与 PUT 都受这里的必填约束限制，因此 PUT 也必须带中文名。
+     * 但 Service 的 apply() 对其余字段是「传了才改」：null 表示本次不动这个字段，
+     * 空串表示清空。所以 PUT 是必填项校验 + 其余字段按需局部更新，不是整体替换。
  */
 public final class SpeciesForms {
 

@@ -9,6 +9,7 @@ import com.gdou.marinebio.entity.User;
 import com.gdou.marinebio.entity.UserStatus;
 import com.gdou.marinebio.service.UserService;
 import jakarta.servlet.http.HttpServletRequest;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -60,21 +61,21 @@ public class UserController {
 
     @PostMapping("/{id}/approve")
     public Result<User> approve(@PathVariable Integer id,
-                                @RequestBody AuthForms.Approve form,
+                                @Valid @RequestBody AuthForms.Approve form,
                                 @AuthenticationPrincipal LoginUser operator) {
         return Result.ok("审核完成", userService.approve(id, form, operator));
     }
 
     @PutMapping("/{id}/role")
     public Result<User> assignRole(@PathVariable Integer id,
-                                   @RequestBody AuthForms.AssignRole form,
+                                   @Valid @RequestBody AuthForms.AssignRole form,
                                    @AuthenticationPrincipal LoginUser operator) {
         return Result.ok("角色已更新", userService.assignRole(id, form.role(), operator));
     }
 
     @PutMapping("/{id}/password")
     public Result<Void> resetPassword(@PathVariable Integer id,
-                                      @RequestBody AuthForms.ResetPassword form,
+                                      @Valid @RequestBody AuthForms.ResetPassword form,
                                       @AuthenticationPrincipal LoginUser operator) {
         userService.resetPassword(id, form.newPassword(), operator);
         return Result.ok("密码已重置", null);
@@ -84,13 +85,13 @@ public class UserController {
 
     @PutMapping("/profile")
     public Result<User> updateProfile(@AuthenticationPrincipal LoginUser loginUser,
-                                      @RequestBody AuthForms.Profile form) {
+                                      @Valid @RequestBody AuthForms.Profile form) {
         return Result.ok("个人信息已更新", userService.updateProfile(loginUser.getId(), form));
     }
 
     @PostMapping("/password")
     public Result<Void> changePassword(@AuthenticationPrincipal LoginUser loginUser,
-                                       @RequestBody AuthForms.ChangePassword form,
+                                       @Valid @RequestBody AuthForms.ChangePassword form,
                                        HttpServletRequest request) {
         userService.changePassword(loginUser, form.oldPassword(), form.newPassword());
         // 改密后立刻作废当前会话：旧密码泄露出去时，攻击者手上的会话不能继续用

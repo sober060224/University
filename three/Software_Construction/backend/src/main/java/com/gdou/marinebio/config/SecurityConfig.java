@@ -23,6 +23,7 @@ import org.springframework.security.web.context.HttpSessionSecurityContextReposi
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.security.web.csrf.CsrfTokenRequestAttributeHandler;
+import org.springframework.security.web.access.intercept.AuthorizationFilter;
 
 import java.io.IOException;
 
@@ -79,7 +80,10 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain filterChain(HttpSecurity http,
-                                           SecurityContextRepository securityContextRepository) throws Exception {
+                                           SecurityContextRepository securityContextRepository,
+                                           UserRepository userRepository) throws Exception {
+        // 会话新鲜度校验必须排在鉴权之前：降权/停用要立刻生效，不能等会话自然过期
+        SessionFreshnessFilter sessionFreshnessFilter = new SessionFreshnessFilter(userRepository);
         // 前端是单页应用，CSRF 令牌从可读的 Cookie 中取，由 axios 自动回填到请求头
         CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
         CsrfTokenRequestAttributeHandler csrfRequestHandler = new CsrfTokenRequestAttributeHandler();
@@ -92,7 +96,11 @@ public class SecurityConfig {
                 // ---------- 公开接口 ----------
                 .requestMatchers(HttpMethod.POST, "/api/auth/login", "/api/auth/register").permitAll()
                 .requestMatchers(HttpMethod.GET, "/api/auth/csrf").permitAll()
-                // 未登录访客可以浏览公开的物种与生态系统信息
+                // 未登录访客可以浏览公开的物种与生态系统信息。
+                // 但 /api/ecosystems/stats 带有各生态系统的观测次数与物种数，
+                // 且统计没有按 is_public 过滤，会把未公开物种的数量一起暴露出去，
+                // 所以它不能跟着下面的通配规则一起公开。
+                .requestMatchers(HttpMethod.GET, "/api/ecosystems/stats").authenticated()
                 .requestMatchers(HttpMethod.GET, "/api/species/**", "/api/ecosystems/**").permitAll()
                 // 任何登录用户都能改自己的资料和密码，必须排在下面的管理员规则之前
                 .requestMatchers(HttpMethod.PUT, "/api/users/profile").authenticated()
@@ -114,6 +122,8 @@ public class SecurityConfig {
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfTokenRepository)
                 .csrfTokenRequestHandler(csrfRequestHandler))
+            // 放在鉴权之前：降权、停用、改密码必须立刻生效
+            .addFilterBefore(sessionFreshnessFilter, AuthorizationFilter.class)
             .formLogin(form -> form.disable())
             .httpBasic(basic -> basic.disable())
             .logout(logout -> logout

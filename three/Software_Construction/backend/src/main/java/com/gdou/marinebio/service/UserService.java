@@ -58,11 +58,15 @@ public class UserService {
     @Transactional
     public User approve(Integer id, AuthForms.Approve form, LoginUser operator) {
         User user = require(id);
-        boolean approved = form.approved() == null || form.approved();
+        // 缺字段必须是「不通过」而不是「通过」：审核是放行账号进入系统的闸门，
+        // 默认值给成 true 意味着一个残缺的请求体就能激活账号。
+        boolean approved = Boolean.TRUE.equals(form.approved());
         user.setStatus(approved ? UserStatus.ACTIVE : UserStatus.REJECTED);
         if (approved && form.role() != null && !form.role().isBlank()) {
             user.setRole(parseRole(form.role(), user.getRole()));
         }
+        // 审核会同时改状态和角色，已经登录的旧会话必须一起作废
+        user.setCredentialVersion(user.getCredentialVersion() + 1);
         User saved = userRepository.save(user);
         logService.record(operator, "模块一", approved ? "审核通过" : "审核驳回", "用户", id,
                 "用户「" + user.getUsername() + "」" + (approved ? "已激活" : "被驳回"));
@@ -100,6 +104,7 @@ public class UserService {
             throw new BizException("原密码不正确");
         }
         user.setPassword(passwordEncoder.encode(newPassword));
+        user.setCredentialVersion(user.getCredentialVersion() + 1);
         userRepository.save(user);
     }
 
@@ -108,6 +113,7 @@ public class UserService {
     public void resetPassword(Integer id, String newPassword, LoginUser operator) {
         User user = require(id);
         user.setPassword(passwordEncoder.encode(newPassword));
+        user.setCredentialVersion(user.getCredentialVersion() + 1);
         userRepository.save(user);
         logService.record(operator, "模块一", "重置密码", "用户", id, "重置用户「" + user.getUsername() + "」的登录密码");
     }
@@ -118,11 +124,16 @@ public class UserService {
         Role newRole = parseRole(role, user.getRole());
         // 只在「把最后一名管理员改成别的角色」时拦截；授予 ADMIN 不受限制，
         // 否则系统里只剩一名管理员时反而无法再增设第二名。
+        // 先对管理员集合加写锁再判断数量：否则两个并发请求会同时读到 count=2、
+        // 各自认为「还有别人」，最后把管理员清空，而 /api/users/** 只允许 ADMIN 访问，
+        // 系统只能直接改库才能救回来。
         if (user.getRole() == Role.ADMIN && newRole != Role.ADMIN
-                && userRepository.countByRole(Role.ADMIN) <= 1) {
+                && userRepository.lockAllByRole(Role.ADMIN).size() <= 1) {
             throw new BizException("系统至少需要保留一名管理员");
         }
         user.setRole(newRole);
+        // 降权/升权都要作废对方已持有的会话，否则旧角色还能继续用满 2 小时
+        user.setCredentialVersion(user.getCredentialVersion() + 1);
         User saved = userRepository.save(user);
         logService.record(operator, "模块一", "调整角色", "用户", id,
                 "用户「" + user.getUsername() + "」角色调整为 " + newRole.name());

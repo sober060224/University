@@ -10,6 +10,11 @@
 DROP DATABASE IF EXISTS marine_biodiv;
 CREATE DATABASE marine_biodiv DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
+-- 显式声明客户端连接字符集。mysql 命令行客户端在中文 Windows 上默认用系统
+-- 代码页（GBK/936）读文件，UTF-8 的中文种子数据会被当成双字节字符，
+-- 于是第一条 INSERT 就报 "Data too long for column 'real_name'" 而整份脚本导入失败。
+SET NAMES utf8mb4;
+
 USE marine_biodiv;
 
 -- ============================================================
@@ -29,6 +34,10 @@ CREATE TABLE IF NOT EXISTS users (
     student_no  VARCHAR(30)           DEFAULT NULL,
     role        VARCHAR(20)  NOT NULL DEFAULT 'PUBLIC' COMMENT 'ADMIN/RESEARCHER/STUDENT/PUBLIC',
     status      VARCHAR(20)  NOT NULL DEFAULT 'PENDING' COMMENT 'PENDING/ACTIVE/REJECTED',
+    -- 凭据版本号：改密码、重置密码、调整角色、停用账号时自增。
+    -- 已登录会话里存的是登录那一刻的版本号，每次请求都比对一次，
+    -- 不一致就作废会话——否则密码改了、角色降了，对方的会话还能继续用最长 2 小时。
+    credential_version INT NOT NULL DEFAULT 1,
     create_time DATETIME     DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY unique_username (username),
     INDEX idx_role (role),
@@ -65,7 +74,9 @@ CREATE TABLE IF NOT EXISTS species (
     create_time      DATETIME              DEFAULT CURRENT_TIMESTAMP,
     update_time      DATETIME              DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     FOREIGN KEY (created_by) REFERENCES users (id) ON DELETE SET NULL,
-    INDEX idx_chinese_name (chinese_name),
+    -- 中文名唯一：SpeciesService.create/update 已经用 existsByChineseName 拦过一次，
+    -- 这里再落一个唯一键，防止两个请求同时通过检查后各写一条同名记录。
+    UNIQUE KEY unique_chinese_name (chinese_name),
     INDEX idx_phylum (phylum),
     INDEX idx_protection_level (protection_level),
     INDEX idx_endanger_status (endanger_status)

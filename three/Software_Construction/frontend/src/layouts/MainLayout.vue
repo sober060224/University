@@ -12,7 +12,7 @@
 
             <div class="navbar__user">
                 <span class="tag tag--muted">{{ store.roleName }}</span>
-                <span class="navbar__name">{{ store.profile.realName }}</span>
+                <span class="navbar__name">{{ store.profile?.realName }}</span>
                 <button class="btn btn--sm btn--ghost" @click="onLogout">退出</button>
             </div>
         </nav>
@@ -58,8 +58,13 @@ const menu = computed(() => {
 })
 
 async function onLogout() {
-    await store.logout()
-    router.push('/login')
+    // 退出接口失败也要跳回登录页：store.logout() 已在 finally 里清空本地状态，
+    // 若此时仍停在布局里，profile 为 null 会让整棵布局渲染失败（白屏且无法自救）。
+    try {
+        await store.logout()
+    } finally {
+        router.push('/login')
+    }
 }
 </script>
 

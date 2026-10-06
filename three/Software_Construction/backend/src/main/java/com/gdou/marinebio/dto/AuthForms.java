@@ -2,6 +2,7 @@ package com.gdou.marinebio.dto;
 
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
 import java.util.List;
@@ -33,10 +34,14 @@ public final class AuthForms {
             @Size(max = 30) String studentNo) {
     }
 
-    /** 管理员审核：approved 决定激活还是驳回，role 用于在通过时一并授予科研人员身份 */
+    /**
+     * 管理员审核：approved 决定激活还是驳回，role 用于在通过时一并授予科研人员身份。
+     * approved 必须显式给出——审核是账号进入系统的唯一闸门，缺字段按「不通过」处理，
+     * 绝不能让一个残缺的请求体把账号放行。
+     */
     public record Approve(
-            Boolean approved,
-            String role) {
+            @NotNull(message = "请选择审核结果") Boolean approved,
+            @Size(max = 20) String role) {
     }
 
     public record Profile(
@@ -63,20 +68,27 @@ public final class AuthForms {
             @NotBlank(message = "请选择角色") String role) {
     }
 
+    /**
+     * 模块五各能力的入参。
+     * 长度上限与 ai_records 的列宽对齐（input_text VARCHAR(1000)、input_image VARCHAR(255)）：
+     * 超长不会在这里被拦下，而是等 saveRecord 写库时才由 MySQL 抛「Data too long」，
+     * 用户看到的是笼统的「服务器内部错误」，问题定位也变得困难。
+     */
+
     /** 模块五：图像智能识别与物种鉴定 */
     public record Identify(
-            @NotBlank(message = "请先上传图片") String imageUrl) {
+            @NotBlank(message = "请先上传图片") @Size(max = 255) String imageUrl) {
     }
 
     /** 模块五：文本辅助分类与补全 */
     public record Complete(
-            @NotBlank(message = "请输入中文名或学名中的至少一项") String name) {
+            @NotBlank(message = "请输入中文名或学名中的至少一项") @Size(max = 1000) String name) {
     }
 
     /** 模块五：物种描述多语言翻译 */
     public record Translate(
-            @NotBlank(message = "没有可翻译的内容") String text,
-            @NotBlank(message = "请选择目标语言") String targetLanguage) {
+            @NotBlank(message = "没有可翻译的内容") @Size(max = 1000) String text,
+            @NotBlank(message = "请选择目标语言") @Size(max = 50) String targetLanguage) {
     }
 
     /**
@@ -85,16 +97,22 @@ public final class AuthForms {
      * 分析完再连同分析结果一起提交。
      */
     public record Analyze(
-            String observeTime,
-            String locationName,
+            @Size(max = 30) String observeTime,
+            @Size(max = 200) String locationName,
             Double longitude,
             Double latitude,
-            String ecosystemName,
-            List<String> speciesNames) {
+            @Size(max = 100) String ecosystemName,
+            // 每个物种名都会触发一次 matchByName 查询，不设上限等于让一个请求
+            // 驱动任意多次数据库往返。
+            @Size(max = 50, message = "一次分析最多支持 50 个物种") List<@Size(max = 150) String> speciesNames) {
     }
 
     /** 模块五：智能问答与科研助手 */
     public record Ask(
-            @NotBlank(message = "请输入你的问题") String question) {
+            // 上限 1000 对应 ai_records.input_text；ask 是 @Transactional，
+            // 超长导致写库失败时事务已被标记为 rollback-only，提交时会变成
+            // UnexpectedRollbackException，白白浪费一次大模型调用还丢掉这条问答。
+            @NotBlank(message = "请输入你的问题")
+            @Size(max = 1000, message = "问题长度不能超过 1000 个字符") String question) {
     }
 }

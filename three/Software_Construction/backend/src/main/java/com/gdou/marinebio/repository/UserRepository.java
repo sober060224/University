@@ -6,8 +6,13 @@ import com.gdou.marinebio.entity.UserStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
+import jakarta.persistence.LockModeType;
+
+import java.util.List;
 import java.util.Optional;
 
 public interface UserRepository extends JpaRepository<User, Integer> {
@@ -19,6 +24,18 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     long countByStatus(UserStatus status);
 
     long countByRole(Role role);
+
+    /**
+     * 锁住当前全部管理员，用于「系统至少保留一名管理员」这条规则的检查。
+     *
+     * <p>用户表没有任何约束能兜住这件事，所以必须靠数据库锁把「查数量」和
+     * 「改角色」串行化：两个管理员同时把对方降级时，两个 count 都读到 2、都能通过
+     * 检查，最后一个管理员也没了，而 /api/users/** 只允许 ADMIN 访问，
+     * 只能直接改库才能救回来。
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.role = :role order by u.id")
+    List<User> lockAllByRole(@Param("role") Role role);
 
     Page<User> findByStatus(UserStatus status, Pageable pageable);
 

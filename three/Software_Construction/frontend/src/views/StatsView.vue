@@ -101,10 +101,24 @@ async function load() {
   }
 }
 
-// 导出：拉全量记录交给通用工具生成 .xlsx（page 是 0 基，取第一页）
+// 导出：按 total 分页拉全量记录交给通用工具生成 .xlsx（page 是 0 基）
+// 注意不能只取第一页：后端 PageResult 会把 size 夹到上限 100，
+// 物种超过 100 条时只导第一页等于静默丢数据，用户不会收到任何提示。
+async function fetchAllPages(listFn, params) {
+  const first = await listFn({ ...params, page: 0, size: 100 })
+  const all = [...(first.records || [])]
+  const total = first.total || 0
+  const pages = Math.ceil(total / 100)
+  for (let p = 1; p < pages; p++) {
+    const next = await listFn({ ...params, page: p, size: 100 })
+    all.push(...(next.records || []))
+  }
+  return all
+}
+
 async function exportSpecies() {
   try {
-    const res = await speciesApi.list({ page: 0, size: 100 })
+    const records = await fetchAllPages(speciesApi.list, {})
     exportExcel('物种信息统计', '物种', [
       { header: '中文名', key: 'chineseName', width: 16 },
       { header: '学名', key: 'scientificName', width: 22 },
@@ -118,7 +132,7 @@ async function exportSpecies() {
       { header: '经度', key: 'longitude', width: 11 },
       { header: '纬度', key: 'latitude', width: 11 },
       { header: '是否公开', key: 'isPublic', width: 10 }
-    ], res.records.map(s => ({ ...s, isPublic: s.isPublic ? '是' : '否' })))
+    ], records.map(s => ({ ...s, isPublic: s.isPublic ? '是' : '否' })))
   } catch (e) {
     alert(e.message)
   }
@@ -126,7 +140,7 @@ async function exportSpecies() {
 
 async function exportObservations() {
   try {
-    const res = await observationApi.list({ page: 0, size: 100 })
+    const records = await fetchAllPages(observationApi.list, {})
     exportExcel('观测记录统计', '观测记录', [
       { header: '观测时间', key: 'observeTime', width: 20 },
       { header: '生态系统', key: 'ecosystemName', width: 16 },
@@ -138,7 +152,7 @@ async function exportObservations() {
       { header: '水深(m)', key: 'depth', width: 10 },
       { header: '天气', key: 'weather', width: 10 },
       { header: '备注', key: 'notes', width: 32 }
-    ], res.records.map(o => ({
+    ], records.map(o => ({
       ...o,
       observeTime: formatTime(o.observeTime),
       ecosystemName: o.ecosystem?.name || ''

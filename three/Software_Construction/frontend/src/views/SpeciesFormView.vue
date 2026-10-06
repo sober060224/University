@@ -155,12 +155,27 @@ const form = reactive(blank())
 const saving = ref(false)
 const completing = ref(false)
 
+// 智能补全写回字段时用的中文名，弹窗里要给用户看中文而不是字段名
+const LABELS = {
+  scientificName: '学名', phylum: '门', className: '纲', orderName: '目',
+  familyName: '科', genusName: '属', speciesName: '种', morphology: '形态特征',
+  habits: '生活习性', distribution: '分布', protectionLevel: '保护级别',
+  endangerStatus: '濒危等级'
+}
+
 onMounted(async () => {
   if (isEdit) {
-    const data = await speciesApi.detail(route.params.id)
-    Object.keys(form).forEach((k) => {
-      if (data[k] !== null && data[k] !== undefined) form[k] = data[k]
-    })
+    try {
+      const data = await speciesApi.detail(route.params.id)
+      Object.keys(form).forEach((k) => {
+        if (data[k] !== null && data[k] !== undefined) form[k] = data[k]
+      })
+    } catch (e) {
+      // 加载失败必须退出：否则留下的是一个看着正常、实则全空的表单，
+      // 而 isPublic 默认 true，用户只补中文名就能把原本未公开的物种发布出去。
+      alert(e.message)
+      router.push('/species')
+    }
   }
 })
 
@@ -185,8 +200,10 @@ async function autoComplete() {
     }
     ;['scientificName', 'phylum', 'className', 'orderName', 'familyName', 'genusName', 'speciesName',
       'morphology', 'habits', 'distribution', 'protectionLevel', 'endangerStatus']
-      .forEach((k) => pick(k, k))
+      .forEach((k) => pick(k, LABELS[k] || k))
     alert(filled.length ? `已自动补全：${filled.join('、')}` : '大模型没有返回可补全的新字段')
+  } catch (e) {
+    alert(e.message)
   } finally {
     completing.value = false
   }
@@ -195,8 +212,15 @@ async function autoComplete() {
 async function upload(e) {
   const file = e.target.files[0]
   if (!file) return
-  const res = await uploadApi.image(file)
-  form.imageUrl = res.url
+  try {
+    const res = await uploadApi.image(file)
+    form.imageUrl = res.url
+  } catch (e) {
+    alert(e.message)
+  } finally {
+    // 清空 input，连续上传同一张图片时才会再次触发 change
+    e.target.value = ''
+  }
 }
 
 async function submit() {
@@ -212,6 +236,9 @@ async function submit() {
       await speciesApi.create(form)
     }
     router.push('/species')
+  } catch (e) {
+    // 后端校验失败会带上具体字段原因，不弹出来等于保存按钮按了没反应
+    alert(e.message)
   } finally {
     saving.value = false
   }

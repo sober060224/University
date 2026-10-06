@@ -197,6 +197,8 @@ async function analyze() {
     })
     // 接口返回 { tags, warnings, summary, raw }
     analysis.value = res
+  } catch (e) {
+    alert(e.message)
   } finally {
     analyzing.value = false
   }
@@ -224,6 +226,10 @@ async function submit() {
       await observationApi.create(payload)
     }
     router.push('/observations')
+  } catch (e) {
+    // 后端已经把「重复关联物种」「只能修改自己提交的记录」等业务原因写进 message，
+    // 这里必须弹出来，否则保存失败只有按钮恢复可用，用户看不到任何原因。
+    alert(e.message)
   } finally {
     saving.value = false
   }

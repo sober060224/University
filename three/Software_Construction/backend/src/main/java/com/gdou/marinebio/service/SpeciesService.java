@@ -139,7 +139,12 @@ public class SpeciesService {
 
     /**
      * 大模型返回物种名后，用它去库里找可能对应的记录。
-     * 检索语句本身就是"包含匹配"，精确名会排在最前，因此取前 5 条作为候选即可。
+     *
+     * <p>先做精确匹配，命中就直接返回；没命中再退回包含匹配取前 5 条当候选。
+     * 以前是直接取包含匹配的前 5 条，并注释说「精确名会排在最前」——search 没有 order by，
+     * 实际返回的是 id 升序，于是"最可能的那条"只是 id 最小的任意一行。
+     * 这个值会写进 ai_records.target_species_id，也决定异常检测用哪条分布信息，
+     * 拿错会让大模型对着别的物种的分布下结论。
      *
      * <p>候选集同样受 is_public 约束：这个方法对任何登录角色开放，
      * 若不过滤，未公开的物种会从图像识别接口漏出去。
@@ -149,7 +154,12 @@ public class SpeciesService {
             return List.of();
         }
         Boolean isPublic = canSeeAll(role) ? null : Boolean.TRUE;
-        return speciesRepository.search(isPublic, modelName.trim(), null, null, null, null, Pageable.ofSize(5))
+        String name = modelName.trim();
+        List<Species> exact = speciesRepository.findExactByName(isPublic, name);
+        if (!exact.isEmpty()) {
+            return exact;
+        }
+        return speciesRepository.search(isPublic, name, null, null, null, null, Pageable.ofSize(5))
                 .getContent();
     }
 

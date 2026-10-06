@@ -29,6 +29,21 @@ public interface SpeciesRepository extends JpaRepository<Species, Integer> {
     Page<Species> search(Boolean isPublic, String keyword, String phylum, String protectionLevel,
                          String endangerStatus, String distribution, Pageable pageable);
 
+    /**
+     * 按名称精确匹配（中文名或学名，忽略大小写）。
+     *
+     * <p>模块五把大模型返回的物种名回连到库里时需要这个：search 是包含匹配且没有排序，
+     * 直接取前 5 条的话「最可能的那一条」只是 id 最小的任意一行，
+     * 会把错的分布信息喂给异常检测。
+     */
+    @Query("""
+            select s from Species s where
+              (:isPublic is null or s.isPublic = :isPublic)
+              and (lower(s.chineseName) = lower(:name) or lower(s.scientificName) = lower(:name))
+            order by s.id
+            """)
+    List<Species> findExactByName(Boolean isPublic, String name);
+
     /** 下拉框用：已登记的分类单元（门），供检索条件做二级联动 */
     @Query("select distinct s.phylum from Species s where s.phylum is not null and s.phylum <> '' order by s.phylum")
     List<String> findDistinctPhylum();

@@ -68,4 +68,12 @@ public class User extends BaseEntity {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false, length = 20)
     private UserStatus status = UserStatus.PENDING;
+
+    /**
+     * 凭据版本号。改密码、重置密码、调整角色、账号被停用时自增，
+     * 已登录会话里存的是登录那一刻的版本号，由 SessionFreshnessFilter 每次请求比对。
+     * 不做这件事的话，密码改了、权限降了，对方手上的会话还能继续用满 2 小时。
+     */
+    @Column(name = "credential_version", nullable = false)
+    private Integer credentialVersion = 1;
 }

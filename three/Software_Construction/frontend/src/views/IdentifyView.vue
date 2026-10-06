@@ -53,7 +53,8 @@ async function identify() {
   error.value = ''
   try {
     result.value = await aiApi.identify({ imageUrl: imageUrl.value })
-    loadRecords()
+    // 刷新调用记录要等完，否则识别按钮已经恢复、记录表还是旧的
+    await loadRecords()
   } catch (e) {
     error.value = e.message
   } finally {
@@ -82,8 +83,15 @@ function confidenceLabel(value) {
 }
 
 async function loadRecords() {
-  const res = await aiApi.records({ page: toApiPage(page.value), size })
-  records.value = res
+  try {
+    const res = await aiApi.records({ page: toApiPage(page.value), size })
+    // 模板里直接读 records.records / records.total，接口一旦没按分页结构返回，
+    // 渲染期就会抛 undefined.length 而整页白屏，所以这里只接受带 records 的结构。
+    records.value = res?.records ? res : { records: [], total: 0 }
+  } catch (e) {
+    records.value = { records: [], total: 0 }
+    error.value = e.message
+  }
 }
 
 function changePage(next) {

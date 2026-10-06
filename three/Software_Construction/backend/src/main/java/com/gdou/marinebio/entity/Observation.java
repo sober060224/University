@@ -36,7 +36,11 @@ public class Observation extends BaseEntity {
     @JoinColumn(name = "ecosystem_id", nullable = false)
     private Ecosystem ecosystem;
 
-    /** 观测人员。不设外键约束，人员被删除后观测记录仍需保留 */
+    /**
+     * 观测人员。外键是存在的，只是 database.sql 用 ON DELETE SET NULL：
+     * 人员被删除后观测记录保留，observer_id 置空而不是级联删除，
+     * 也正因如此 observerId 允许为空，此时只有管理员能改这条记录。
+     */
     @Column(name = "observer_id")
     private Integer observerId;
 

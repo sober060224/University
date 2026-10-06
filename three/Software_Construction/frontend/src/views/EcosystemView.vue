@@ -35,7 +35,7 @@
               </td>
             </tr>
             <tr v-if="!rows.length">
-              <td class="table__empty" :colspan="store.canEdit ? 7 : 6">暂无数据</td>
+              <td class="table__empty" :colspan="store.canEdit ? 7 : 6">{{ loadError || '暂无数据' }}</td>
             </tr>
           </tbody>
         </table>
@@ -75,13 +75,21 @@ const store = useUserStore()
 // /api/ecosystems/stats 一次返回名称 + 观测次数 + 发现物种数，列表页直接用这份数据，
 // 不用再发一次 list 请求然后在前端拼。
 const rows = ref([])
+const loadError = ref('')
 const editing = ref(false)
 const form = reactive({ id: null, name: '', code: '', description: '' })
 
 onMounted(load)
 
 async function load() {
-  rows.value = await ecosystemApi.stats()
+  try {
+    rows.value = await ecosystemApi.stats()
+    loadError.value = ''
+  } catch (e) {
+    // 失败时不能停在「暂无数据」，那会把一次报错伪装成库里没有生态系统
+    rows.value = []
+    loadError.value = `加载失败：${e.message}`
+  }
 }
 
 async function open(row) {
@@ -106,10 +114,16 @@ async function save() {
     alert('名称不能为空')
     return
   }
-  if (form.id) {
-    await ecosystemApi.update(form.id, form)
-  } else {
-    await ecosystemApi.create(form)
+  try {
+    if (form.id) {
+      await ecosystemApi.update(form.id, form)
+    } else {
+      await ecosystemApi.create(form)
+    }
+  } catch (e) {
+    // 保存失败时保持弹窗打开，让用户改完再提交；否则弹窗关了、错误也看不到，只能反复点
+    alert(e.message)
+    return
   }
   editing.value = false
   await load()
@@ -117,7 +131,12 @@ async function save() {
 
 async function remove(row) {
   if (!confirm(`确定删除「${row.name}」？该生态系统下的观测记录会一并删除。`)) return
-  await ecosystemApi.remove(row.id)
+  try {
+    await ecosystemApi.remove(row.id)
+  } catch (e) {
+    alert(e.message)
+    return
+  }
   await load()
 }
 </script>

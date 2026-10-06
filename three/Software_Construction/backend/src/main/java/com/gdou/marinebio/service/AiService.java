@@ -5,9 +5,11 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.gdou.marinebio.ai.DashScopeClient;
 import com.gdou.marinebio.common.BizException;
 import com.gdou.marinebio.common.LoginUser;
+import com.gdou.marinebio.common.PageResult;
 import com.gdou.marinebio.dto.AuthForms;
 import com.gdou.marinebio.entity.AiRecord;
 import com.gdou.marinebio.entity.AiType;
+import com.gdou.marinebio.entity.Species;
 import com.gdou.marinebio.repository.AiRecordRepository;
 import com.gdou.marinebio.repository.ChatMessageRepository;
 import com.gdou.marinebio.entity.ChatMessage;
@@ -170,7 +172,6 @@ public class AiService {
      * 这里用关键词检索先把模块二/三的相关数据取出来作为上下文交给模型，
      * 效果足够且不引入 NL2SQL 那套复杂度。
      */
-    @Transactional
     public Map<String, Object> ask(AuthForms.Ask form, LoginUser user) {
         long start = System.currentTimeMillis();
         String question = form.question();
@@ -178,13 +179,17 @@ public class AiService {
         // 用问题里的词去检索模块二（物种）与模块三（观测），作为回答依据
         String context = buildContext(question, user == null ? null : user.getRole());
 
+        // 调大模型放在事务外：read-timeout 是 30 秒、还带 2 次重试，
+        // 放在 @Transactional 里会占住一个连接池连接最长约 98 秒；
+        // 连接池只有 10 个，10 个人同时提问就把整个应用拖死了（包括登录接口）。
+        // 这里也不需要事务：chatText 只是纯 HTTP 调用，两个 save 各自自带事务。
+        String answer = client.chatText(QA_PROMPT, "用户检索到的系统数据：\n" + context + "\n\n问题：" + question);
+
         ChatMessage ask = new ChatMessage();
         ask.setUserId(user.getId());
         ask.setRole("user");
         ask.setContent(question);
         chatMessageRepository.save(ask);
-
-        String answer = client.chatText(QA_PROMPT, "用户检索到的系统数据：\n" + context + "\n\n问题：" + question);
 
         ChatMessage reply = new ChatMessage();
         reply.setUserId(user.getId());
@@ -252,10 +257,48 @@ public class AiService {
 
     // ========== 工具方法 ==========
 
+    /**
+     * 从自然语言问题里挑出可用于检索的关键词。
+     *
+     * <p>检索语句是 {@code like %keyword%}，直接拿整句去匹配基本永远命中不了：
+     * 「红树林里招潮蟹的分布情况如何」拿去比对 chinese_name 是匹配不到任何物种的。
+     * 这里按标点与常见提问词切分，逐个尝试，取第一个有结果的。
+     */
+    private List<String> keywordsOf(String question) {
+        List<String> candidates = new ArrayList<>();
+        String cleaned = question == null ? "" : question;
+        // 先放去掉提问词的主体，再放切分后的片段
+        for (String token : cleaned.split("[\\s,，。？?！!、；;：:（）()「」\"']+")) {
+            String t = token.trim();
+            if (t.length() < 2 || t.length() > 12) {
+                continue;
+            }
+            // 去掉「如何」「怎么样」「是什么」这类尾巴，它们不是物种名的一部分
+            String stripped = t.replaceAll("(如何|怎么样|怎样|是什么|多少|请问|介绍|查询|搜索)+$", "");
+            if (stripped.length() >= 2 && !candidates.contains(stripped)) {
+                candidates.add(stripped);
+            }
+            if (!candidates.contains(t)) {
+                candidates.add(t);
+            }
+        }
+        if (candidates.isEmpty() && !cleaned.isBlank()) {
+            candidates.add(cleaned.trim());
+        }
+        return candidates;
+    }
+
     private String buildContext(String question, Role role) {
         StringBuilder sb = new StringBuilder();
-        var species = speciesService.search(role, question, null, null, null, null,
-                org.springframework.data.domain.Pageable.ofSize(8)).getRecords();
+        // 物种检索：逐个关键词试，取第一个有结果的
+        List<Species> species = List.of();
+        for (String kw : keywordsOf(question)) {
+            species = speciesService.search(role, kw, null, null, null, null,
+                    org.springframework.data.domain.Pageable.ofSize(8)).getRecords();
+            if (!species.isEmpty()) {
+                break;
+            }
+        }
         sb.append("【物种数据】\n");
         if (species.isEmpty()) {
             sb.append("（无匹配记录）\n");
@@ -274,7 +317,24 @@ public class AiService {
         }
 
         sb.append("\n【观测记录】\n");
-        var observations = observationService.mapPoints().stream().limit(10).toList();
+        // 观测同样按关键词检索。原来是无序 findAllWithEcosystem() 取前 10 条，
+        // 完全不看问题，捞出来的是任意 10 条记录，等于把无关数据当依据交给模型。
+        List<Map<String, Object>> observations = List.of();
+        for (String kw : keywordsOf(question)) {
+            observations = observationService
+                    .search(null, null, null, kw, null, null, PageResult.of(0, 10, 100, null))
+                    .getRecords().stream().map(o -> {
+                        Map<String, Object> item = new LinkedHashMap<>();
+                        item.put("observeTime", o.getObserveTime());
+                        item.put("locationName", o.getLocationName());
+                        item.put("ecosystem", o.getEcosystem() == null ? "未指定" : o.getEcosystem().getName());
+                        item.put("speciesCount", "若干");
+                        return item;
+                    }).toList();
+            if (!observations.isEmpty()) {
+                break;
+            }
+        }
         if (observations.isEmpty()) {
             sb.append("（无匹配记录）\n");
         } else {

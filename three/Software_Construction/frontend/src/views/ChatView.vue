@@ -26,12 +26,19 @@ async function scrollToBottom() {
 }
 
 async function loadHistory() {
-  const list = await aiApi.history()
-  messages.value = list.map(m => ({
-    role: m.role,
-    content: m.content,
-    time: formatTime(m.createTime)
-  }))
+  try {
+    const list = await aiApi.history()
+    // 失败不能只留空数组：那会让空状态提示「先试试下面这些例子」，
+    // 用户以为是自己第一次用，实际是历史记录没拉到。
+    messages.value = (list || []).map(m => ({
+      role: m.role,
+      content: m.content,
+      time: formatTime(m.createTime)
+    }))
+    error.value = ''
+  } catch (e) {
+    error.value = `历史记录加载失败：${e.message}`
+  }
   scrollToBottom()
 }
 
@@ -46,7 +53,11 @@ async function send(text) {
   scrollToBottom()
   try {
     const res = await aiApi.ask({ question: ask })
-    messages.value.push({ role: 'assistant', content: res.answer, time: formatTime(new Date().toISOString()) })
+    messages.value.push({
+      role: 'assistant',
+      content: res?.answer || '（大模型没有返回内容）',
+      time: formatTime(new Date().toISOString())
+    })
   } catch (e) {
     error.value = e.message
   } finally {
@@ -57,8 +68,14 @@ async function send(text) {
 
 async function clearHistory() {
   if (!confirm('确定要清空当前账号的问答历史吗？')) return
-  await aiApi.clearHistory()
-  messages.value = []
+  try {
+    await aiApi.clearHistory()
+    messages.value = []
+    error.value = ''
+  } catch (e) {
+    // 清空失败时不能本地抹掉列表，否则界面与服务端不一致，刷新后又回来了
+    error.value = e.message
+  }
 }
 
 onMounted(loadHistory)

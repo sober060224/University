@@ -12,7 +12,12 @@
       </div>
     </div>
 
-    <div v-if="!item.id" class="card">加载中…</div>
+    <div v-if="error" class="alert alert--error">
+      {{ error }}
+      <RouterLink class="btn btn--sm btn--ghost" to="/species">返回物种列表</RouterLink>
+    </div>
+
+    <div v-else-if="!item.id" class="card">加载中…</div>
 
     <template v-else>
       <div class="card">
@@ -85,6 +90,7 @@ const item = ref({})
 const translated = ref('')
 const translateLang = ref('English')
 const observationCount = ref(0)
+const error = ref('')
 
 const coordText = computed(() => {
   if (item.value.longitude == null || item.value.latitude == null) return '—'
@@ -99,10 +105,22 @@ const endangerClass = computed(() => {
 })
 
 onMounted(async () => {
-  item.value = await speciesApi.detail(route.params.id)
-  // 模块二/三交叉统计：这个物种被观测过多少次
-  const obs = await observationApi.list({ speciesId: item.value.id, size: 1 })
-  observationCount.value = obs.total
+  // 失败时不能停在「加载中…」：item 为空时 v-if="!item.id" 永远成立，
+  // 页面会一直转圈且没有任何出错提示，所以把失败原因存进 error 由模板显示。
+  try {
+    item.value = await speciesApi.detail(route.params.id)
+  } catch (e) {
+    error.value = e.message
+    return
+  }
+  try {
+    // 模块二/三交叉统计：这个物种被观测过多少次
+    const obs = await observationApi.list({ speciesId: item.value.id, size: 1 })
+    observationCount.value = obs?.total || 0
+  } catch (e) {
+    // 统计失败不影响详情本身，只提示这一项不可用
+    error.value = `观测次数统计失败：${e.message}`
+  }
 })
 
 // 模块五：物种描述多语言支持
@@ -114,7 +132,11 @@ async function translate() {
     alert('该物种还没有可用于翻译的描述内容')
     return
   }
-  const res = await aiApi.translate({ text, targetLanguage: translateLang.value })
-  translated.value = res.text
+  try {
+    const res = await aiApi.translate({ text, targetLanguage: translateLang.value })
+    translated.value = res?.text || ''
+  } catch (e) {
+    alert(e.message)
+  }
 }
 </script>

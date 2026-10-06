@@ -54,20 +54,31 @@ public class StatsService {
         result.put("overview", overview);
         // 各分类单元 / 保护等级 / 濒危度占比，数据来自模块二
         result.putAll(speciesService.distributionStats(role));
-        result.put("ecosystemStats", toEcosystemStats());
+        result.put("ecosystemStats", toEcosystemStats(role));
         result.put("monthlyStats", toPairs(observationRepository.countByMonth()));
         result.put("observerStats", toPairs(observationRepository.countByObserver()));
         return result;
     }
 
-    /** 各生态系统类型的观测次数与发现的物种数（模块三数据）。 */
+    /**
+     * 各生态系统类型的观测次数与发现的物种数（模块三数据）。
+     *
+     * <p>和看板一样按角色过滤：学生与公众看到的「发现物种数」只数已公开物种，
+     * 否则能从这个数字反推出该生态系统里还藏着多少未公开物种。
+     */
     @Transactional(readOnly = true)
-    public List<Map<String, Object>> ecosystemStats() {
-        return toEcosystemStats();
+    public List<Map<String, Object>> ecosystemStats(Role role) {
+        return toEcosystemStats(role);
     }
 
-    private List<Map<String, Object>> toEcosystemStats() {
-        return ecosystemRepository.statsWithCounts().stream().map(row -> {
+    /** 管理员与科研人员可见全部物种，其余角色只统计已公开的 */
+    private static boolean seesAllSpecies(Role role) {
+        return role == Role.ADMIN || role == Role.RESEARCHER;
+    }
+
+    private List<Map<String, Object>> toEcosystemStats(Role role) {
+        int publicFilter = seesAllSpecies(role) ? 1 : 0;
+        return ecosystemRepository.statsWithCounts(publicFilter).stream().map(row -> {
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("id", row[0]);
             item.put("name", row[1]);

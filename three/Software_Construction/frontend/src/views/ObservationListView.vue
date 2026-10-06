@@ -14,7 +14,7 @@
 
     <div class="card">
       <div class="filter-bar">
-        <input v-model="query.keyword" class="input" placeholder="地点或备注关键字" />
+        <input v-model="query.keyword" class="input" placeholder="观测地点关键字" />
         <select v-model="query.ecosystemId" class="select">
           <option value="">全部生态系统</option>
           <option v-for="e in ecosystems" :key="e.id" :value="e.id">{{ e.name }}</option>
@@ -63,7 +63,7 @@
               </td>
             </tr>
             <tr v-if="!rows.length">
-              <td class="table__empty" :colspan="store.canEdit ? 5 : 4">暂无数据</td>
+              <td class="table__empty" :colspan="store.canEdit ? 5 : 4">{{ loadError || '暂无数据' }}</td>
             </tr>
           </tbody>
         </table>
@@ -109,28 +109,40 @@ const ecosystems = ref([])
 const species = ref([])
 const total = ref(0)
 const expanded = ref(null)
+const loadError = ref('')
 
 const query = reactive({
   page: 1, size: 10, keyword: '', ecosystemId: '', speciesId: '', from: '', to: ''
 })
 
 onMounted(async () => {
+  // 下拉数据失败不应阻断列表：allSettled 保证下面的 load() 一定执行，
+  // 否则任一请求出错都会让表格停在「暂无数据」，把请求失败伪装成没有数据。
+  const [eco, sp] = await Promise.allSettled([ecosystemApi.list(), speciesApi.list({ size: 100 })])
   // 物种列表接口返回分页对象，这里只取 records，否则物种下拉会渲染成 { records, total }
-  const [eco, sp] = await Promise.all([ecosystemApi.list(), speciesApi.list({ size: 100 })])
-  ecosystems.value = eco
-  species.value = sp.records || []
+  if (eco.status === 'fulfilled') ecosystems.value = eco.value
+  if (sp.status === 'fulfilled') species.value = sp.value?.records || []
   await load()
 })
 
 async function load() {
-  const data = await observationApi.list({ ...query, page: toApiPage(query.page) })
-  rows.value = data.records
-  total.value = data.total
+  // 请求失败时不能停在「暂无数据」：那会把一次报错伪装成库里没有记录
+  try {
+    const data = await observationApi.list({ ...query, page: toApiPage(query.page) })
+    rows.value = data?.records || []
+    total.value = data?.total || 0
+    loadError.value = ''
+  } catch (e) {
+    rows.value = []
+    total.value = 0
+    loadError.value = `加载失败：${e.message}`
+  }
 }
 
 // 点观测时间展开关联物种 —— 模块三的核心交互点
+// 接口返回的是 { observation, species }，观测记录本身在 observation 里，没有顶层 id
 async function toggle(row) {
-  expanded.value = expanded.value && expanded.value.id === row.id ? null : await observationApi.detail(row.id)
+  expanded.value = expanded.value?.observation?.id === row.id ? null : await observationApi.detail(row.id)
 }
 
 function onPage(p) {
@@ -151,6 +163,8 @@ function reset() {
 async function remove(row) {
   if (!confirm(`确定删除 ${formatTime(row.observeTime)} 的观测记录？关联的物种信息会一并删除。`)) return
   await observationApi.remove(row.id)
+  // 删掉的正是当前展开的那条时，必须一起收起，否则下方仍显示已删除记录的关联物种
+  if (expanded.value?.observation?.id === row.id) expanded.value = null
   await load()
 }
 

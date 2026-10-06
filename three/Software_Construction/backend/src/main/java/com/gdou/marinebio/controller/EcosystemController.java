@@ -39,8 +39,8 @@ public class EcosystemController {
 
     /** 模块四：各生态系统类型的观测次数与发现的物种数 */
     @GetMapping("/stats")
-    public Result<List<Map<String, Object>>> stats() {
-        return Result.ok(statsService.ecosystemStats());
+    public Result<List<Map<String, Object>>> stats(@AuthenticationPrincipal LoginUser loginUser) {
+        return Result.ok(statsService.ecosystemStats(loginUser.getRole()));
     }
 
     @GetMapping("/{id}")
@@ -56,7 +56,7 @@ public class EcosystemController {
 
     @PutMapping("/{id}")
     public Result<Ecosystem> update(@PathVariable Integer id,
-                                    @RequestBody SpeciesForms.Ecosystem form,
+                                    @Valid @RequestBody SpeciesForms.Ecosystem form,
                                     @AuthenticationPrincipal LoginUser loginUser) {
         return Result.ok("生态系统已更新", ecosystemService.update(id, form, loginUser));
     }

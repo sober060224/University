@@ -17,8 +17,10 @@ spring:
     # 要彻底去掉它就得配上 TLS（useSSL=true 并信任服务端证书），本项目只在本机跑，不做。
     url: jdbc:mysql://localhost:3306/marine_biodiv?useUnicode=true&characterEncoding=UTF-8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
     username: ${DB_USERNAME:root}
-    # 密码不写死在仓库里，优先读环境变量 DB_PASSWORD，没设置时退回本机默认口令
-    password: ${DB_PASSWORD:Chenweisheng.1}
+    # 口令只从环境变量 DB_PASSWORD 读取，仓库里不留任何默认值。
+    # 没设置时就是空串，连接会以 MySQL 原生的 Access denied 失败——
+    # 正好对应 README 第 8 节的排查条目，不会在别人机器上意外连上某个库。
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
     hikari:
       maximum-pool-size: 10

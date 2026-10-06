@@ -11,6 +11,12 @@ export default defineConfig({
             '/api': {
                 target: 'http://localhost:8088',
                 changeOrigin: true
+            },
+            // 上传接口返回的是 /uploads/... 的相对路径，打包后由后端托管，
+            // 开发时同样要走代理，否则所有已上传的图片都是 404
+            '/uploads': {
+                target: 'http://localhost:8088',
+                changeOrigin: true
             }
         }
     },

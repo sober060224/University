@@ -69,4 +69,14 @@ router.afterEach((to) => {
         : '海洋生物多样性信息管理系统'
 })
 
+// 懒加载分包拉取失败（重新构建后浏览器缓存了旧的 index.html、网络抖动等）会让导航直接 reject，
+// 结果是整页只剩空白且没有任何恢复入口。刷新一次重新取最新的 index.html 即可。
+router.onError((err) => {
+    if (/Loading chunk|Failed to fetch dynamically|Importing a module script failed/i.test(String(err))) {
+        window.location.reload()
+    } else {
+        console.error(err)
+    }
+})
+
 export default router

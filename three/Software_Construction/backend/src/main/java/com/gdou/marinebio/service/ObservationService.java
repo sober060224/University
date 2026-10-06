@@ -76,8 +76,11 @@ public class ObservationService {
         checkOwnership(observation, operator);
         apply(observation, form, false);
         Observation saved = observationRepository.save(observation);
-        // form.species() 带 @NotEmpty，到这里必然非空，直接整组替换关联
+        // form.species() 带 @NotEmpty，到这里必然非空，直接整组替换关联。
+        // 必须先 flush 让删除真正落库再插入新关联，否则 IDENTITY 主键会让 INSERT
+        // 抢在 DELETE 前面执行，撞 unique_observation_species 唯一键。
         observationSpeciesRepository.deleteByObservationId(id);
+        observationSpeciesRepository.flush();
         saveLinks(observation, form.species(), operator.getRole());
         logService.record(operator, "模块三", "编辑观测记录", "观测记录", id, "编辑观测记录 #" + id);
         return saved;
@@ -198,8 +201,18 @@ public class ObservationService {
         }
     }
 
+    /**
+     * 取一条观测记录用于编辑或删除。
+     *
+     * <p>必须走 fetch join：application.yml 里 open-in-view 是 false，
+     * 而 Observation.ecosystem 是 LAZY。改用 findById 的话，返回值里的 ecosystem
+     * 仍是未初始化的 Hibernate 代理，事务一提交 Jackson 就找不到它的序列化器，
+     * PUT 接口整个响应 500（No serializer found for ByteBuddyInterceptor）。
+     * update 还要把实体原样返回给前端，所以这里必须取完整的。
+     */
     private Observation require(Integer id) {
-        return observationRepository.findById(id).orElseThrow(() -> new BizException("观测记录不存在"));
+        return observationRepository.findWithEcosystemById(id)
+                .orElseThrow(() -> new BizException("观测记录不存在"));
     }
 
     private static String blankToNull(String value) {

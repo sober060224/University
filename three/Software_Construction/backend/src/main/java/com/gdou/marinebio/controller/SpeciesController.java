@@ -73,7 +73,7 @@ public class SpeciesController {
 
     @PutMapping("/{id}")
     public Result<Species> update(@PathVariable Integer id,
-                                  @RequestBody SpeciesForms.Create form,
+                                  @Valid @RequestBody SpeciesForms.Create form,
                                   @AuthenticationPrincipal LoginUser loginUser) {
         return Result.ok("物种信息已更新", speciesService.update(id, form, loginUser));
     }

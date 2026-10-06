@@ -62,9 +62,11 @@ export const useUserStore = defineStore('user', {
             }
         },
 
+        // loaded 必须置回 false：本文件 load() 上方的注释说明了原因——一旦置 true，
+        // load() 就会一直空转，之后所有路由守卫都拿不到 profile，只能整页刷新才能恢复。
         clear() {
             this.profile = null
-            this.loaded = true
+            this.loaded = false
         }
     }
 })
