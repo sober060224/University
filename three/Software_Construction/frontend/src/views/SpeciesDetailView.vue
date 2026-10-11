@@ -7,7 +7,8 @@
       </div>
       <div class="page__actions">
         <button class="btn btn--ghost" @click="$router.back()">返回列表</button>
-        <button v-if="store.canEdit" class="btn" @click="translate">多语言描述</button>
+        <!-- 翻译对所有登录角色开放（矩阵 表 3-2 公众也是 √），不能跟着「编辑」一起收进 canEdit -->
+        <button v-if="store.isLogin" class="btn" @click="translate">多语言描述</button>
         <button v-if="store.canEdit" class="btn" @click="$router.push(`/species/${item.id}/edit`)">编辑</button>
       </div>
     </div>
@@ -39,7 +40,7 @@
           <div class="desc-item"><span class="desc-item__label">濒危度</span><span class="desc-item__value"><span v-if="item.endangerStatus" class="tag" :class="endangerClass">{{ item.endangerStatus }}</span><span v-else>—</span></span></div>
           <div class="desc-item"><span class="desc-item__label">是否公开</span><span class="desc-item__value">{{ item.isPublic ? '公开（公众可见）' : '内部数据' }}</span></div>
           <div class="desc-item"><span class="desc-item__label">分布坐标</span><span class="desc-item__value">{{ coordText }}</span></div>
-          <div class="desc-item"><span class="desc-item__label">观测记录</span><span class="desc-item__value">{{ observationCount }} 次</span></div>
+          <div class="desc-item"><span class="desc-item__label">观测记录</span><span class="desc-item__value">{{ countError ? '统计暂不可用（' + countError + '）' : observationCount + ' 次' }}</span></div>
           <div class="desc-item"><span class="desc-item__label">更新时间</span><span class="desc-item__value">{{ formatTime(item.updateTime) }}</span></div>
         </div>
       </div>
@@ -69,9 +70,15 @@
         <pre class="chat__bubble">{{ translated }}</pre>
       </div>
 
-      <div v-if="item.videoUrl" class="card">
+      <div v-if="videoUrl" class="card">
         <h3 class="card__title">影像资料</h3>
-        <a :href="item.videoUrl" target="_blank" rel="noopener">{{ item.videoUrl }}</a>
+        <a :href="videoUrl" target="_blank" rel="noopener noreferrer">{{ videoUrl }}</a>
+      </div>
+      <div v-else-if="item.videoUrl" class="card">
+        <h3 class="card__title">影像资料</h3>
+        <!-- 只有 http(s) 地址才会渲染成链接：javascript: 之类的值绑到 :href 上，
+             任何人在这个页面点一下就会当作脚本执行，而本页对未登录访客也开放。 -->
+        <p class="page__desc">已登记的地址不是合法的 http(s) 链接，出于安全考虑不生成跳转：<code>{{ item.videoUrl }}</code></p>
       </div>
     </template>
   </div>
@@ -82,7 +89,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute } from 'vue-router'
 import { speciesApi, observationApi, aiApi } from '../api'
 import { useUserStore } from '../store/user'
-import { formatTime } from '../utils'
+import { formatTime, safeExternalUrl } from '../utils'
 
 const route = useRoute()
 const store = useUserStore()
@@ -90,12 +97,16 @@ const item = ref({})
 const translated = ref('')
 const translateLang = ref('English')
 const observationCount = ref(0)
+const countError = ref('')
 const error = ref('')
 
 const coordText = computed(() => {
   if (item.value.longitude == null || item.value.latitude == null) return '—'
   return `${item.value.longitude}, ${item.value.latitude}`
 })
+
+// 只有 http(s) 绝对地址才允许生成可点击的链接
+const videoUrl = computed(() => safeExternalUrl(item.value.videoUrl))
 
 const endangerClass = computed(() => {
   const s = item.value.endangerStatus || ''
@@ -118,8 +129,11 @@ onMounted(async () => {
     const obs = await observationApi.list({ speciesId: item.value.id, size: 1 })
     observationCount.value = obs?.total || 0
   } catch (e) {
-    // 统计失败不影响详情本身，只提示这一项不可用
-    error.value = `观测次数统计失败：${e.message}`
+    // 统计失败不影响详情本身，只提示这一项不可用。
+    // 原先这里写的是页面级的 error，而模板第一句就是 v-if="error" → 整页详情被替换成
+    // 一句错误提示加一个「返回物种列表」按钮：一个次要的计数请求失败，
+    // 会把已经取到的物种详情全部抹掉。计数有自己的状态位。
+    countError.value = e.message
   }
 })
 

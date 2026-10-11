@@ -2,11 +2,13 @@
 // 模块四：数据可视化与报表 —— 物种分布地图 / 观测地点地图
 // 两张图的数据分别来自模块二与模块三，与愿景文档的模块依赖关系一致。
 // 底图使用 OpenStreetMap 公共瓦片 + Leaflet 开源库，不依赖任何商业地图 API。
-import { ref, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import L from 'leaflet'
 import { speciesApi, observationApi } from '../api/index'
-import { formatTime } from '../utils/index'
+import { formatTime, PROTECTION_LEVELS, protectionColor } from '../utils/index'
+import { useUserStore } from '../store/user'
 
+const store = useUserStore()
 const mapEl = ref(null)
 const loading = ref(false)
 const mode = ref('species')
@@ -18,16 +20,14 @@ let layer = null
 const CENTER = [21.15, 110.42]
 const ZOOM = 9
 
-// 保护等级决定物种点颜色；观测点按生态系统上色
-const LEVEL_COLORS = {
-  一级保护: '#e4572e',
-  二级保护: '#f0a500',
-  重点保护: '#0e9c9c',
-  一般保护: '#0a6e96'
-}
+// 观测点按生态系统轮换上色
 const ECO_COLORS = ['#0a6e96', '#0e9c9c', '#f0a500', '#e4572e', '#7b5ea7', '#3c8dbc']
 
 const legend = ref([])
+
+// 观测地点地图属于「统计报表与分布地图」，矩阵里公众是 ×，后端也会回 403，
+// 所以这个 tab 对公众直接隐藏；物种分布地图本身是公开信息，仍然保留。
+const showObservationTab = computed(() => store.canViewStats)
 
 function escapeHtml(text) {
   return String(text ?? '').replace(/[&<>"']/g, c => ({
@@ -36,9 +36,18 @@ function escapeHtml(text) {
 }
 
 function renderSpecies(points) {
-  legend.value = Object.keys(LEVEL_COLORS).map(name => ({ name, color: LEVEL_COLORS[name] }))
+  // 图例只列当前数据里真实出现的等级。原来无条件列出四个等级，
+  // 而这四个等级的名字跟库里的取值一个都对不上，等于在图上摆了一份假的图例。
+  const present = PROTECTION_LEVELS.filter(level => points.some(p => p.protectionLevel === level.name))
+  const others = [...new Set(
+    points.map(p => p.protectionLevel).filter(name => name && !PROTECTION_LEVELS.some(l => l.name === name))
+  )]
+  legend.value = [
+    ...present.map(level => ({ name: level.name, color: level.color })),
+    ...others.map(name => ({ name, color: protectionColor(name) }))
+  ]
   points.forEach(p => {
-    const color = LEVEL_COLORS[p.protectionLevel] || '#5b6b78'
+    const color = protectionColor(p.protectionLevel)
     L.circleMarker([p.latitude, p.longitude], {
       radius: 8, color, weight: 2, fillColor: color, fillOpacity: 0.55
     }).bindPopup(`
@@ -85,10 +94,10 @@ async function load() {
     if (layer) layer.remove()
     layer = L.layerGroup().addTo(map)
 
-    if (mode.value === 'species') {
-      renderSpecies(await speciesApi.map())
-    } else {
+    if (mode.value === 'observations' && showObservationTab.value) {
       renderObservations(await observationApi.map())
+    } else {
+      renderSpecies(await speciesApi.map())
     }
   } catch (e) {
     alert(e.message)
@@ -97,13 +106,13 @@ async function load() {
   }
 }
 
-onMounted(async () => {
+onMounted(() => {
   map = L.map(mapEl.value, { center: CENTER, zoom: ZOOM, scrollWheelZoom: true })
   L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
     maxZoom: 18,
     attribution: '&copy; OpenStreetMap contributors'
   }).addTo(map)
-  await load()
+  load()
 })
 
 watch(mode, load)
@@ -125,7 +134,7 @@ onBeforeUnmount(() => {
       <div class="page__actions">
         <div class="btn-group">
           <button class="btn" :class="{ 'map-tab--active': mode === 'species' }" @click="mode = 'species'">物种分布地图</button>
-          <button class="btn" :class="{ 'map-tab--active': mode === 'observations' }" @click="mode = 'observations'">观测地点地图</button>
+          <button v-if="showObservationTab" class="btn" :class="{ 'map-tab--active': mode === 'observations' }" @click="mode = 'observations'">观测地点地图</button>
         </div>
         <button class="btn btn--ghost" @click="load">刷新</button>
       </div>

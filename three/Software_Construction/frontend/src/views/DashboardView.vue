@@ -7,7 +7,8 @@
             </div>
             <div class="page__actions">
                 <button class="btn btn--ghost" :disabled="loading" @click="load">刷新</button>
-                <button class="btn btn--ghost" @click="exportPdf">导出 PDF</button>
+                <!-- 导出按 表 3-2 限管理员与科研人员；学生能看看板，但不能导出 -->
+                <button v-if="store.canEdit" class="btn btn--ghost" @click="exportPdf">导出 PDF</button>
             </div>
         </div>
 
@@ -36,12 +37,12 @@
                     <div class="stat-card__value">{{ data.overview.ecosystemTotal }}</div>
                     <div class="stat-card__hint">珊瑚礁 / 红树林 / 海草床等</div>
                 </div>
-                <div class="stat-card">
+                <div v-if="data.overview.userTotal != null" class="stat-card">
                     <div class="stat-card__label">科研人员</div>
                     <div class="stat-card__value">{{ data.overview.researcherTotal }}</div>
                     <div class="stat-card__hint">系统用户 {{ data.overview.userTotal }} 人</div>
                 </div>
-                <div class="stat-card">
+                <div v-if="data.overview.pendingUserTotal != null" class="stat-card">
                     <div class="stat-card__label">待审核用户</div>
                     <div class="stat-card__value">{{ data.overview.pendingUserTotal }}</div>
                     <div class="stat-card__hint">注册申请数量</div>
@@ -52,11 +53,11 @@
             <div class="chart-grid">
                 <div class="card">
                     <h2 class="card__title">各分类单元物种占比</h2>
-                    <ChartBox :option="pieOption('phylum')"/>
+                    <ChartBox :option="phylumOption"/>
                 </div>
                 <div class="card">
                     <h2 class="card__title">保护等级分布</h2>
-                    <ChartBox :option="pieOption('protectionLevel')"/>
+                    <ChartBox :option="protectionOption"/>
                 </div>
                 <div class="card">
                     <h2 class="card__title">各生态系统观测次数与发现物种数</h2>
@@ -66,13 +67,13 @@
                     <h2 class="card__title">逐月观测次数</h2>
                     <ChartBox :option="monthlyOption"/>
                 </div>
-                <div class="card">
+                <div v-if="data.observerStats" class="card">
                     <h2 class="card__title">观测人员活跃度</h2>
                     <ChartBox :option="observerOption"/>
                 </div>
                 <div class="card">
                     <h2 class="card__title">濒危度分布</h2>
-                    <ChartBox :option="pieOption('endangerStatus')"/>
+                    <ChartBox :option="endangerOption"/>
                 </div>
             </div>
         </template>
@@ -83,6 +84,10 @@
 import { computed, onMounted, ref } from 'vue'
 import { statsApi } from '../api'
 import { exportPdf } from '../utils'
+import { useUserStore } from '../store/user'
+
+// 表 3-2「导出 Excel / PDF」为 √ √ × ×，学生与公众无导出权
+const store = useUserStore()
 import ChartBox from '../components/ChartBox.vue'
 
 const data = ref(null)
@@ -103,8 +108,11 @@ async function load() {
     }
 }
 
-function pieOption(key) {
-    const rows = data.value[key] || []
+// 三个饼图的 option 必须是 computed，不能在模板里直接调用函数：
+// 模板方法每次渲染都返回一个新对象，ChartBox 的 deep watch 会认为「option 变了」，
+// 于是任何一次无关的重渲染都会把六张图全部 setOption(..., true) 重画一遍。
+function buildPieOption(key) {
+    const rows = data.value?.[key] || []
     return {
         tooltip: { trigger: 'item', formatter: '{b}: {c} 种 ({d}%)' },
         legend: { bottom: 0, type: 'scroll' },
@@ -120,6 +128,10 @@ function pieOption(key) {
         }]
     }
 }
+
+const phylumOption = computed(() => buildPieOption('phylum'))
+const protectionOption = computed(() => buildPieOption('protectionLevel'))
+const endangerOption = computed(() => buildPieOption('endangerStatus'))
 
 const ecosystemOption = computed(() => ({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },

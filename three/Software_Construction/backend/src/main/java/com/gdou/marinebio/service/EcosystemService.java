@@ -30,6 +30,19 @@ public class EcosystemService {
                 .orElseThrow(() -> new BizException("生态系统不存在"));
     }
 
+    /** 智能问答用：问题里点名了哪个生态系统（「请总结红树林生态系统中……」） */
+    public Ecosystem findMentionedIn(String question) {
+        if (question == null || question.isBlank()) {
+            return null;
+        }
+        // 取够候选之后在 Java 侧按名字长度倒序，让更具体的名字胜出
+        // （「红树林」与「红树林湿地」同时命中时该用后者）。
+        return ecosystemRepository.findMentionedIn(question.trim(),
+                        org.springframework.data.domain.Pageable.ofSize(10)).stream()
+                .max(java.util.Comparator.comparingInt(e -> e.getName() == null ? 0 : e.getName().length()))
+                .orElse(null);
+    }
+
     @Transactional
     public Ecosystem create(SpeciesForms.Ecosystem form, LoginUser operator) {
         if (ecosystemRepository.existsByName(form.name())) {

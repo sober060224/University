@@ -34,6 +34,10 @@ public class StatsService {
      *
      * <p>物种相关的三处统计都按调用者角色做数据级过滤：看板对所有登录角色开放，
      * 不带角色参数的话未公开物种的条数会从统计图里漏出去。
+     *
+     * <p>用户与观测人那一组统计只发给管理员与科研人员。矩阵没有把「用户概览」
+     * 列给学生，而 observerStats 返回的是真实姓名加提交条数，等于把同事的
+     * 工作量和姓名一并摊到学生屏幕上；pendingUserTotal 还会暴露排队人数。
      */
     @Transactional(readOnly = true)
     public Map<String, Object> dashboard(Role role) {
@@ -44,11 +48,15 @@ public class StatsService {
         overview.put("speciesTotal", speciesService.countVisible(role));
         overview.put("observationTotal", observationRepository.count());
         overview.put("ecosystemTotal", ecosystemRepository.count());
-        overview.put("userTotal", userRepository.count());
         overview.put("observationThisMonth", observationRepository.countByObserveTimeGreaterThanEqual(monthStart));
         overview.put("observationLast30Days", observationRepository.countByObserveTimeGreaterThanEqual(thirtyDaysAgo));
-        overview.put("researcherTotal", userRepository.countByRole(Role.RESEARCHER));
-        overview.put("pendingUserTotal", userRepository.countByStatus(UserStatus.PENDING));
+
+        boolean managesUsers = role == Role.ADMIN || role == Role.RESEARCHER;
+        if (managesUsers) {
+            overview.put("userTotal", userRepository.count());
+            overview.put("researcherTotal", userRepository.countByRole(Role.RESEARCHER));
+            overview.put("pendingUserTotal", userRepository.countByStatus(UserStatus.PENDING));
+        }
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("overview", overview);
@@ -56,7 +64,9 @@ public class StatsService {
         result.putAll(speciesService.distributionStats(role));
         result.put("ecosystemStats", toEcosystemStats(role));
         result.put("monthlyStats", toPairs(observationRepository.countByMonth()));
-        result.put("observerStats", toPairs(observationRepository.countByObserver()));
+        if (managesUsers) {
+            result.put("observerStats", toPairs(observationRepository.countByObserver()));
+        }
         return result;
     }
 

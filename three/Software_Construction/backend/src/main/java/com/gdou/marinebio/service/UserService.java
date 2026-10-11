@@ -61,9 +61,22 @@ public class UserService {
         // 缺字段必须是「不通过」而不是「通过」：审核是放行账号进入系统的闸门，
         // 默认值给成 true 意味着一个残缺的请求体就能激活账号。
         boolean approved = Boolean.TRUE.equals(form.approved());
-        user.setStatus(approved ? UserStatus.ACTIVE : UserStatus.REJECTED);
-        if (approved && form.role() != null && !form.role().isBlank()) {
-            user.setRole(parseRole(form.role(), user.getRole()));
+        UserStatus newStatus = approved ? UserStatus.ACTIVE : UserStatus.REJECTED;
+        Role newRole = approved && form.role() != null && !form.role().isBlank()
+                ? parseRole(form.role(), user.getRole())
+                : user.getRole();
+
+        // 「至少保留一名管理员」这条规则原本只写在 assignRole 里，但 approve 同样能改角色，
+        // 而且还能改状态：对唯一的管理员点「拒绝」，或把他批准成 STUDENT，
+        // 结果和 assignRole 挡下来的那次降级完全一样——/api/users/** 只允许 ADMIN，
+        // 整个后台只能靠直接改数据库救回来。所以这里按审核后的最终状态一并检查。
+        if (user.getRole() == Role.ADMIN && !keepsAnAdmin(user, newRole, newStatus)) {
+            throw new BizException("系统至少需要保留一名在岗管理员");
+        }
+
+        user.setStatus(newStatus);
+        if (approved) {
+            user.setRole(newRole);
         }
         // 审核会同时改状态和角色，已经登录的旧会话必须一起作废
         user.setCredentialVersion(user.getCredentialVersion() + 1);
@@ -71,6 +84,20 @@ public class UserService {
         logService.record(operator, "模块一", approved ? "审核通过" : "审核驳回", "用户", id,
                 "用户「" + user.getUsername() + "」" + (approved ? "已激活" : "被驳回"));
         return saved;
+    }
+
+    /**
+     * 审核之后系统里是否还剩一名 ACTIVE 的管理员。
+     * 先加写锁再数，避免两个并发的审核/降级请求各自读到「还有别人」。
+     */
+    private boolean keepsAnAdmin(User target, Role newRole, UserStatus newStatus) {
+        boolean targetStaysActiveAdmin = newRole == Role.ADMIN && newStatus == UserStatus.ACTIVE;
+        if (targetStaysActiveAdmin) {
+            return true;
+        }
+        return userRepository.lockAllByRole(Role.ADMIN).stream()
+                .anyMatch(other -> !other.getId().equals(target.getId())
+                        && other.getStatus() == UserStatus.ACTIVE);
     }
 
     public PageResult<User> search(UserStatus status, Role role, String keyword, Pageable pageable) {
@@ -122,14 +149,18 @@ public class UserService {
     public User assignRole(Integer id, String role, LoginUser operator) {
         User user = require(id);
         Role newRole = parseRole(role, user.getRole());
-        // 只在「把最后一名管理员改成别的角色」时拦截；授予 ADMIN 不受限制，
+        // 只在「会让系统失去在岗管理员」时拦截；授予 ADMIN 不受限制，
         // 否则系统里只剩一名管理员时反而无法再增设第二名。
+        //
         // 先对管理员集合加写锁再判断数量：否则两个并发请求会同时读到 count=2、
         // 各自认为「还有别人」，最后把管理员清空，而 /api/users/** 只允许 ADMIN 访问，
         // 系统只能直接改库才能救回来。
-        if (user.getRole() == Role.ADMIN && newRole != Role.ADMIN
-                && userRepository.lockAllByRole(Role.ADMIN).size() <= 1) {
-            throw new BizException("系统至少需要保留一名管理员");
+        //
+        // 判据是「还剩没有一个 status=ACTIVE 的管理员」而不是「管理员条数是否 > 1」：
+        // 库里可能有两名 ADMIN，但另一名是 PENDING/REJECTED，把唯一在岗的那名降级，
+        // 按条数算是能过的，实际后台照样锁死。
+        if (user.getRole() == Role.ADMIN && !keepsAnAdmin(user, newRole, user.getStatus())) {
+            throw new BizException("系统至少需要保留一名在岗管理员");
         }
         user.setRole(newRole);
         // 降权/升权都要作废对方已持有的会话，否则旧角色还能继续用满 2 小时

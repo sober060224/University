@@ -29,6 +29,14 @@ public class LogController {
                                                  @RequestParam(defaultValue = "0") int page,
                                                  @RequestParam(defaultValue = "20") int size) {
         Pageable pageable = PageResult.of(page, size, 200, Sort.by(Sort.Direction.DESC, "id"));
-        return Result.ok(PageResult.of(operationLogRepository.search(module, username, operation, pageable)));
+        // module / operation 在 JPQL 里是等值比较，空串不是「不筛选」而是「筛选等于空串」，
+        // 于是前端把未选中的下拉传成 ?module= 时，列表会一片空白，看不出是权限问题还是没数据。
+        // 关键词那一路走的是 like，空串恰好等价于全选，所以只有这两个等值条件需要归一化。
+        return Result.ok(PageResult.of(operationLogRepository.search(
+                blankToNull(module), blankToNull(username), blankToNull(operation), pageable)));
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 }

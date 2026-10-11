@@ -40,6 +40,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { authApi } from '../api'
+import { safeRedirect } from '../utils'
 import { useUserStore } from '../store/user'
 
 const route = useRoute()
@@ -69,7 +70,7 @@ async function onSubmit() {
     loading.value = true
     try {
         await store.login({ ...form })
-        router.push(route.query.redirect || '/dashboard')
+        router.push(safeRedirect(route.query.redirect))
     } catch (e) {
         error.value = e.message
     } finally {

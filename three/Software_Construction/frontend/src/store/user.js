@@ -20,7 +20,11 @@ export const useUserStore = defineStore('user', {
         roleName: (state) => (state.profile ? (ROLE_NAMES[state.profile.role] || state.profile.role) : '访客'),
         // 科研人员与管理员可以录入、修改数据
         canEdit: (state) => !!state.profile && ['ADMIN', 'RESEARCHER'].includes(state.profile.role),
-        isAdmin: (state) => !!state.profile && state.profile.role === 'ADMIN'
+        isAdmin: (state) => !!state.profile && state.profile.role === 'ADMIN',
+        // 报告 表 3-2 把「查看综合数据看板」「查看统计报表与分布地图」「智能问答」
+        // 对公众标为 ×，后端 SecurityConfig 也照此拦了下来。前端必须跟着藏掉入口，
+        // 否则公众点进这些页面只会拿到一句 403 提示，看起来像系统的 bug。
+        canViewStats: (state) => !!state.profile && ['ADMIN', 'RESEARCHER', 'STUDENT'].includes(state.profile.role)
     },
 
     actions: {

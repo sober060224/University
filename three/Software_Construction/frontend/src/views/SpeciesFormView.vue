@@ -137,13 +137,18 @@
 import { ref, reactive, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { speciesApi, aiApi, uploadApi } from '../api'
+import { PROTECTION_LEVELS } from '../utils'
 
 const route = useRoute()
 const router = useRouter()
 const isEdit = !!route.params.id
 
-const protectionLevels = ['一级保护', '二级保护', '重点保护', '一般保护']
-const endangerLevels = ['极危', '濒危', '易危', '近危', '无危']
+// 取值必须与 database.sql 的 protection_level / endanger_status 以及 AiService
+// 提示词里让模型填的那套词一致。原来这里写的是 一级保护/二级保护/重点保护/一般保护，
+// 库里存的却是 国家二级/自治区重点/无：编辑一个已有物种时，select 的值不在 options 里，
+// 下拉框显示成空白，用户以为这个字段没填，随手一保存就把原来的等级清掉了。
+const protectionLevels = PROTECTION_LEVELS.map((item) => item.name)
+const endangerLevels = ['未评估', '无危', '近危', '易危', '濒危', '极危']
 
 const blank = () => ({
   chineseName: '', scientificName: '', phylum: '', className: '', orderName: '',

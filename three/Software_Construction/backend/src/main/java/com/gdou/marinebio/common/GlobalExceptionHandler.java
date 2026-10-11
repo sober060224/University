@@ -85,14 +85,27 @@ public class GlobalExceptionHandler {
         return Result.fail("请求数据格式有误，请检查后重试");
     }
 
-    /** 查询串类型不匹配，例如 /api/users?id=abc、/api/observations?page=x */
+    /**
+     * 查询串或路径变量类型不匹配，例如 /api/users?id=abc、/api/observations?page=x。
+     *
+     * <p>必须回 400 而不是 HTTP 200 + success:false。这类请求是客户端写错了，
+     * 而 {@code Result.fail} 默认落在 200 上，只看 HTTP 状态的调用方（网关、重试脚本、
+     * 监控、以及任何非本前端的集成）会把「参数非法」当成功统计进去。
+     * 前端 request.js 的响应拦截器对非 2xx 会读 {@code error.response.data.message}，
+     * 所以改成 400 之后界面仍然显示这句中文提示，不会退化成「网络异常」。
+     *
+     * <p>顺带一条真实后果：GET /api/users/profile 会被 {@code /api/users/{id}} 接住，
+     * id="profile" 转 Integer 失败，原先回的是 200 +「参数「id」的值不合法」。
+     */
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
         return Result.fail("参数「" + e.getName() + "」的值不合法");
     }
 
-    /** 缺少必填查询参数 */
+    /** 缺少必填查询参数。同样是客户端错误，理由同上不落 200。 */
     @ExceptionHandler(MissingServletRequestParameterException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleMissingParam(MissingServletRequestParameterException e) {
         return Result.fail("缺少必填参数「" + e.getParameterName() + "」");
     }
@@ -120,16 +133,47 @@ public class GlobalExceptionHandler {
      */
     @ExceptionHandler(DataIntegrityViolationException.class)
     public ResponseEntity<Result<Void>> handleConflict(DataIntegrityViolationException e) {
-        // 真正的唯一键/外键冲突才是「用户填重了」，其余都是基础设施问题
+        // 真正的唯一键/外键冲突才是「用户填重了」
         if (isConstraintConflict(e)) {
             log.warn("数据完整性冲突", e);
             return ResponseEntity.status(HttpStatus.CONFLICT)
                     .body(Result.fail("数据冲突：名称或关联关系已存在，请检查后重试"));
         }
+        // 字段超长、数值越界同样是用户填错，跟数据库通不通没有关系。
+        // MySQL 把这类错误抛成 MysqlDataTruncation，它不带 constraint 字样，
+        // 落到下面的分支就会回一句「服务暂时不可用，请稍后重试」——
+        // 用户照着刷新三次，问题一点没变，监控上还会多出一串假 5xx。
+        if (isValueOutOfRange(e)) {
+            log.warn("字段内容超出列宽或取值范围", e);
+            return ResponseEntity.status(HttpStatus.BAD_REQUEST)
+                    .body(Result.fail("内容有字段超出长度或取值范围，请检查后重试"));
+        }
         // 连接池耗尽、查询超时等：留完整堆栈，提示语说清是服务端问题
         log.error("数据访问异常", e);
         return ResponseEntity.status(HttpStatus.SERVICE_UNAVAILABLE)
                 .body(Result.fail("服务暂时不可用，请稍后重试"));
+    }
+
+    /** 沿因果链判断是不是「值太长 / 太大」这类客户端数据问题 */
+    private static boolean isValueOutOfRange(Throwable e) {
+        Throwable root = e;
+        while (root != null) {
+            String msg = root.getMessage();
+            if (msg != null) {
+                String m = msg.toLowerCase();
+                if (m.contains("data too long") || m.contains("data truncated")
+                        || m.contains("value too long") || m.contains("out of range")
+                        || m.contains("incorrect string value")) {
+                    return true;
+                }
+            }
+            if (root instanceof java.sql.SQLDataException
+                    || root instanceof org.hibernate.exception.DataException) {
+                return true;
+            }
+            root = root.getCause();
+        }
+        return false;
     }
 
     /** 沿因果链找出根因，判断是不是唯一键/外键之类的约束冲突 */

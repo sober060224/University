@@ -41,11 +41,37 @@ public class ObservationService {
     private final EcosystemService ecosystemService;
     private final LogService logService;
 
-    public PageResult<Observation> search(Long ecosystemId, Long observerId, Long speciesId,
+    /**
+     * 观测记录检索。
+     *
+     * <p>按物种筛观测记录时必须先问一句「这个角色看得见这个物种吗」，否则 {@code is_public}
+     * 会被整条绕过：{@code ObservationRepository.search} 的 exists 子查询只按
+     * {@code os.species.id = :speciesId} 匹配，从不 join species，所以公众拿
+     * {@code speciesId=16}（未公开的白斑刺鲀）就能取到该物种出现过的时间、地点名、
+     * 精确经纬度和科研人员备注原文——而同一个物种的详情接口回的是「物种不存在或无权查看」。
+     * 同一份数据两条通路给出相反的权限结论，实测已复现。
+     *
+     * <p>无权或该 id 不存在一律返回空页：既堵住读取，也不留「有记录 vs total=0」
+     * 这种不需要口令的存在性探针。
+     */
+    public PageResult<Observation> search(Role role, Long ecosystemId, Long observerId, Long speciesId,
                                           String keyword, LocalDateTime from, LocalDateTime to,
                                           Pageable pageable) {
+        if (speciesId != null && !canSeeSpecies(role, speciesId)) {
+            return PageResult.of(new org.springframework.data.domain.PageImpl<>(List.of(), pageable, 0));
+        }
         return PageResult.of(observationRepository.search(ecosystemId, observerId, speciesId,
                 blankToNull(keyword), from, to, pageable));
+    }
+
+    /** 该角色是否看得见这个物种：管理员与科研人员全量，其余只看 is_public = 1。 */
+    private boolean canSeeSpecies(Role role, Long speciesId) {
+        if (role == Role.ADMIN || role == Role.RESEARCHER) {
+            return true;
+        }
+        return speciesRepository.findById(speciesId.intValue())
+                .filter(s -> Boolean.TRUE.equals(s.getIsPublic()))
+                .isPresent();
     }
 
     /** 详情：带上所属生态系统与本次观测到的全部物种 */
@@ -106,14 +132,22 @@ public class ObservationService {
             boolean visible = seeAll || Boolean.TRUE.equals(species.getIsPublic());
             Map<String, Object> item = new LinkedHashMap<>();
             item.put("linkId", link.getId());
-            item.put("speciesId", species.getId());
+            // 无权角色看到的必须是整行的遮蔽，而不只是换一个名字。
+            // 原先只遮 chineseName/scientificName/imageUrl/protectionLevel，
+            // 而 speciesId、count、behavior、note 原样下发，实测能拿到
+            // {"speciesId":18,"chineseName":"未公开物种","count":10,"behavior":"跳跃、滑行于岩缝","note":"…"}：
+            // ①科研人员写在隐藏物种上的自由文本本身就足以认出物种与地点，遮名字等于没遮；
+            // ②更要命的是 speciesId 被直接交到无权角色手里，而 /api/observations?speciesId= 曾是
+            //   一条不做可见性校验的通路——两个缺陷拼起来就是一条完整的泄露链。
+            // 行数保留（否则「本次观测到 N 个物种」的计数会反过来泄露隐藏条数），只把内容清空。
+            item.put("speciesId", visible ? species.getId() : null);
             item.put("chineseName", visible ? species.getChineseName() : "未公开物种");
             item.put("scientificName", visible ? species.getScientificName() : null);
             item.put("imageUrl", visible ? species.getImageUrl() : null);
             item.put("protectionLevel", visible ? species.getProtectionLevel() : null);
-            item.put("count", link.getCount());
-            item.put("behavior", link.getBehavior());
-            item.put("note", link.getNote());
+            item.put("count", visible ? link.getCount() : null);
+            item.put("behavior", visible ? link.getBehavior() : null);
+            item.put("note", visible ? link.getNote() : null);
             return item;
         }).toList();
     }

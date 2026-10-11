@@ -1,6 +1,7 @@
 package com.gdou.marinebio.controller;
 
 import com.gdou.marinebio.common.LoginUser;
+import com.gdou.marinebio.entity.Role;
 import com.gdou.marinebio.common.PageResult;
 import com.gdou.marinebio.common.Result;
 import com.gdou.marinebio.dto.SpeciesForms;
@@ -47,9 +48,17 @@ public class ObservationController {
                                                 @RequestParam(required = false)
                                                 @DateTimeFormat(iso = DateTimeFormat.ISO.DATE_TIME) LocalDateTime to,
                                                 @RequestParam(defaultValue = "0") int page,
-                                                @RequestParam(defaultValue = "10") int size) {
-        Pageable pageable = PageResult.of(page, size, 100, Sort.by(Sort.Direction.DESC, "observeTime"));
-        return Result.ok(observationService.search(ecosystemId, observerId, speciesId, keyword, from, to, pageable));
+                                                @RequestParam(defaultValue = "10") int size,
+                                                @AuthenticationPrincipal LoginUser loginUser) {
+        // 次级排序键补上唯一的 id：observe_time 只到分钟且不唯一，MySQL 对
+        // 「ORDER BY 非唯一列 + OFFSET」不保证跨请求的稳定次序，同一行可能出现在两页、
+        // 另一行永远不出现。界面翻页看不出来，但前端 fetchAllPages 靠逐页拉全量做
+        // Excel 导出，顺序不稳等于静默丢行——正是上一轮修「只导第一页」时没挖到的根因。
+        Pageable pageable = PageResult.of(page, size, 100,
+                Sort.by(Sort.Direction.DESC, "observeTime").and(Sort.by(Sort.Direction.DESC, "id")));
+        Role role = loginUser == null ? null : loginUser.getRole();
+        return Result.ok(observationService.search(role, ecosystemId, observerId, speciesId,
+                keyword, from, to, pageable));
     }
 
     /** 模块四：观测地点地图数据点 */

@@ -7,8 +7,9 @@
       </div>
       <div class="page__actions">
         <button v-if="store.canEdit" class="btn" @click="$router.push('/observations/new')">新增观测记录</button>
-        <button class="btn btn--ghost" @click="doExportExcel">导出 Excel</button>
-        <button class="btn btn--ghost" @click="exportPdf">导出 PDF</button>
+        <!-- 导出按 表 3-2 限管理员与科研人员；后端没有导出接口，这两个按钮就是唯一闸门 -->
+        <button v-if="store.canEdit" class="btn btn--ghost" @click="doExportExcel">导出 Excel</button>
+        <button v-if="store.canEdit" class="btn btn--ghost" @click="exportPdf">导出 PDF</button>
       </div>
     </div>
 
@@ -101,7 +102,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { observationApi, ecosystemApi, speciesApi } from '../api'
 import { useUserStore } from '../store/user'
-import { formatTime, exportExcel, exportPdf, toApiPage } from '../utils'
+import { fetchAllPages, formatTime, exportExcel, exportPdf, toApiPage } from '../utils'
 
 const store = useUserStore()
 const rows = ref([])
@@ -142,7 +143,15 @@ async function load() {
 // 点观测时间展开关联物种 —— 模块三的核心交互点
 // 接口返回的是 { observation, species }，观测记录本身在 observation 里，没有顶层 id
 async function toggle(row) {
-  expanded.value = expanded.value?.observation?.id === row.id ? null : await observationApi.detail(row.id)
+  if (expanded.value?.observation?.id === row.id) {
+    expanded.value = null
+    return
+  }
+  try {
+    expanded.value = await observationApi.detail(row.id)
+  } catch (e) {
+    alert(`读取该次观测关联的物种失败：${e.message}`)
+  }
 }
 
 function onPage(p) {
@@ -162,15 +171,24 @@ function reset() {
 
 async function remove(row) {
   if (!confirm(`确定删除 ${formatTime(row.observeTime)} 的观测记录？关联的物种信息会一并删除。`)) return
-  await observationApi.remove(row.id)
+  // 必须接住失败：科研人员只能删自己提交的记录，而删除按钮在每一行都显示，
+  // 点到别人那条时后端会回「只能修改自己提交的观测记录」。
+  // 原来这里没有 catch，异常直接逃出点击函数，界面上一声不响、
+  // 下面那句收起明细和刷新列表也都不会执行，屏幕上仍然留着那条已经删不掉记录。
+  try {
+    await observationApi.remove(row.id)
+  } catch (e) {
+    alert(e.message)
+    return
+  }
   // 删掉的正是当前展开的那条时，必须一起收起，否则下方仍显示已删除记录的关联物种
   if (expanded.value?.observation?.id === row.id) expanded.value = null
   await load()
 }
 
-function exportExcelData() {
+function exportColumns() {
   // 列定义用 exportExcel 约定的 { header, key }；观测人员一列接口不返回，不再导出
-  const columns = [
+  return [
     { header: '观测时间', key: 'observeTime', width: 18 },
     { header: '生态系统', key: 'ecosystemName', width: 14 },
     { header: '观测地点', key: 'locationName', width: 22 },
@@ -182,19 +200,25 @@ function exportExcelData() {
     { header: '天气', key: 'weather', width: 10 },
     { header: '备注', key: 'notes', width: 30 }
   ]
-  return {
-    columns,
-    rows: rows.value.map((r) => ({
-      ...r,
-      observeTime: formatTime(r.observeTime),
-      // 接口返回的是 ecosystem 对象，导出要的是名字，这里摊平一层
-      ecosystemName: r.ecosystem?.name || ''
-    }))
-  }
 }
 
-function doExportExcel() {
-  const { columns, rows: data } = exportExcelData()
-  exportExcel('观测记录', '观测记录', columns, data)
+function flatten(records) {
+  return records.map((r) => ({
+    ...r,
+    observeTime: formatTime(r.observeTime),
+    // 接口返回的是 ecosystem 对象，导出要的是名字，这里摊平一层
+    ecosystemName: r.ecosystem?.name || ''
+  }))
+}
+
+async function doExportExcel() {
+  // 和物种列表一样不能只导当前这一页，按当前筛选条件重新分页取全量
+  try {
+    const { page, size, ...filters } = query
+    const records = await fetchAllPages(observationApi.list, filters)
+    await exportExcel('观测记录', '观测记录', exportColumns(), flatten(records))
+  } catch (e) {
+    alert('导出失败：' + e.message)
+  }
 }
 </script>

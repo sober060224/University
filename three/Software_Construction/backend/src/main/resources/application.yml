@@ -4,6 +4,13 @@ server:
   servlet:
     session:
       timeout: 2h
+      cookie:
+        # SameSite=Lax 让浏览器不会把会话 Cookie 附到第三方站点发起的 POST 上，
+        # 这是 CSRF 令牌之外再加的一道防线（用户从别的站点被诱导点击时尤其有用）。
+        # 不加 Secure 是刻意的：系统只在 http://localhost 上跑，加了浏览器会直接
+        # 丢弃这个 Cookie，登录会立刻失效。真正部署到 HTTPS 之后要一并打开。
+        same-site: lax
+        http-only: true
 
 spring:
   application:
@@ -58,12 +65,19 @@ app:
 ai:
   # 同样走环境变量，避免把真实 Key 提交进仓库
   api-key: ${AI_API_KEY:sk-请填写}
-  base-url: https://llm-kp0ysm1s5yjgc8lf.cn-beijing.maas.aliyuncs.com/compatible-mode/v1 # https://dashscope.aliyuncs.com/compatible-mode/v1
-  vision-model: qwen-vl-max
-  text-model: qwen-plus
+  base-url: https://maas.qianwenaiapi.com/compatible-mode/v1 # https://dashscope.aliyuncs.com/compatible-mode/v1
+  # 两个档位都用 deepseek-v4.1-flash：它同时支持 image_url 输入，所以视觉与文本合一。
+  # 换模型前实测过：图文请求返回 200 且能正确识别图形；它是推理模型，思考内容走
+  # reasoning_content、正文走 content，客户端只读 content，不受影响。
+  # 需要回到阿里原生档位就改回 qwen-vl-max / qwen-plus。
+  vision-model: deepseek-v4.1-flash
+  text-model: deepseek-v4.1-flash
   connect-timeout-ms: 5000
   read-timeout-ms: 30000
   max-retry: 2
+  # 一次业务调用的总时限（含重试）。必须明显小于前端 request.js 的 60 秒 axios 超时，
+  # 否则浏览器已经报「请求超时」，后端还在替用户等第二次生成。
+  retry-deadline-ms: 50000
 
 logging:
   level:

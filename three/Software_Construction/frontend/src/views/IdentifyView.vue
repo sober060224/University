@@ -2,7 +2,7 @@
 // 模块五 能力一：图像智能识别与物种鉴定
 // 调用大模型多模态接口返回最可能物种 + 置信度，并回查本库已有物种记录供一键关联；
 // 置信度较低时展示候选列表，走人工确认流程。
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, onBeforeUnmount } from 'vue'
 import { aiApi, uploadApi } from '../api/index'
 import Pagination from '../components/Pagination.vue'
 import { formatTime, toApiPage } from '../utils/index'
@@ -100,6 +100,15 @@ function changePage(next) {
 }
 
 onMounted(loadRecords)
+
+// 预览用的 objectURL 只在「换下一张图」时释放过，离开本页时最后那一份一直挂在
+// Blob 引用上不会被回收；反复进出识别页就会稳定泄漏。
+onBeforeUnmount(() => {
+  if (preview.value) {
+    URL.revokeObjectURL(preview.value)
+    preview.value = ''
+  }
+})
 </script>
 
 <template>

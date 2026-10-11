@@ -90,9 +90,9 @@ public class SpeciesService {
         logService.record(operator, "模块二", "删除物种", "物种", id, "删除物种「" + species.getChineseName() + "」");
     }
 
-    /** 分类单元下拉选项 */
-    public List<String> listPhylums() {
-        return speciesRepository.findDistinctPhylum();
+    /** 分类单元下拉选项，同样按可见性过滤 */
+    public List<String> listPhylums(Role role) {
+        return speciesRepository.findDistinctPhylum(canSeeAll(role) ? null : Boolean.TRUE);
     }
 
     // ---------------- 模块四：分布地图与统计分析的数据源 ----------------
@@ -136,6 +136,33 @@ public class SpeciesService {
     }
 
     // ---------------- 模块五：图像识别结果回连已有物种 ----------------
+
+    /**
+     * 智能问答用：找出「名字出现在了这个问题里」的已登记物种。
+     *
+     * <p>方向与 {@link #matchByName} 相反，也相反于列表页的关键词检索：
+     * 问题是一整句自然语言，物种名是句中的短子串，只有 {@code 问题 like %物种名%}
+     * 才匹配得上。原来只有一条正向路径，把整句话当关键词去 like 字段，
+     * 界面上三个示例问题一个都检索不到，模型只能对着空上下文作答。
+     */
+    public List<Species> findMentionedIn(String question, Role role, int limit) {
+        if (question == null || question.isBlank()) {
+            return List.of();
+        }
+        Boolean isPublic = canSeeAll(role) ? null : Boolean.TRUE;
+        int safeLimit = Math.max(limit, 1);
+        // 多取一些再在 Java 侧按名字长度倒序截断：一句话里同时出现「红树林」和
+        // 「红树林弹涂鱼」时，更具体的那条才该是答案主体。判据放在这里而不是
+        // SQL 的 ORDER BY 函数表达式里，既可测又可改。
+        return speciesRepository
+                .findMentionedIn(question.trim(), isPublic,
+                        org.springframework.data.domain.Pageable.ofSize(safeLimit * 3))
+                .stream()
+                .sorted(java.util.Comparator.comparingInt(
+                        (Species s) -> s.getChineseName() == null ? 0 : s.getChineseName().length()).reversed())
+                .limit(safeLimit)
+                .toList();
+    }
 
     /**
      * 大模型返回物种名后，用它去库里找可能对应的记录。

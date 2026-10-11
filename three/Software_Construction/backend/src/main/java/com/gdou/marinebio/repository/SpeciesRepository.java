@@ -44,9 +44,45 @@ public interface SpeciesRepository extends JpaRepository<Species, Integer> {
             """)
     List<Species> findExactByName(Boolean isPublic, String name);
 
-    /** 下拉框用：已登记的分类单元（门），供检索条件做二级联动 */
-    @Query("select distinct s.phylum from Species s where s.phylum is not null and s.phylum <> '' order by s.phylum")
-    List<String> findDistinctPhylum();
+    /**
+     * 反向实体链接：找出「名字出现在了这句话里」的物种。
+     *
+     * <p>方向与 {@link #search} 相反。search 是「字段 like %关键词%」，适合用户只写了
+     * 部分名字（「牡蛎」要能匹到「珍珠牡蛎」）；但把一整句自然语言当关键词去 like 字段
+     * 永远匹配不上——字段只有 5 个字，问题有 16 个字。智能问答原来只有后一条路，
+     * 于是界面里三个示例问题一个都检索不到数据，模型只能对着空上下文作答。
+     *
+     * <p>这里改成「问题 like %物种名%」，正是自然语言点名某个已登记实体时该有的匹配方式。
+     * 排序交给调用方在 Java 侧按名字长度倒序处理，语句本身只按 id 排序：
+     * 「哪个名字更具体」是业务判据，放在 SQL 的 ORDER BY 函数表达式里既不好验证也不好改。
+     * 候选集同样受 is_public 约束，与 matchByName 一致。
+     */
+    @Query("""
+            select s from Species s where
+              (:isPublic is null or s.isPublic = :isPublic)
+              and ((s.chineseName is not null and s.chineseName <> ''
+                      and :question like concat('%', s.chineseName, '%'))
+                or (s.scientificName is not null and s.scientificName <> ''
+                      and :question like concat('%', s.scientificName, '%')))
+            order by s.id
+            """)
+    List<Species> findMentionedIn(String question, Boolean isPublic, Pageable pageable);
+
+    /**
+     * 下拉框用：已登记的分类单元（门），供检索条件做二级联动。
+     *
+     * <p>这个接口挂在 permitAll 的 GET /api/species/phylums 上，所以同样必须带 isPublic：
+     * 列表、详情、聚合统计三条路径都按可见性改写过查询条件，唯独这里漏了。
+     * 只要有一个未公开物种登记了某个门类，这个门类名就会从下拉选项里漏给公众，
+     * 公众由此能反推出「这个门里藏着若干条看不到的记录」。
+     */
+    @Query("""
+            select distinct s.phylum from Species s
+            where s.phylum is not null and s.phylum <> ''
+              and (:isPublic is null or s.isPublic = :isPublic)
+            order by s.phylum
+            """)
+    List<String> findDistinctPhylum(Boolean isPublic);
 
     /** 看板概览的物种总数，同样按可见性过滤 */
     @Query("select count(s) from Species s where (:isPublic is null or s.isPublic = :isPublic)")

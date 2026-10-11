@@ -1,7 +1,7 @@
 <script setup>
 // 模块一：个人资料
 // 所有已登录用户均可访问：左侧维护资料，右侧修改密码。
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { userApi } from '../api/index'
 import { useUserStore } from '../store/user'
@@ -10,6 +10,8 @@ const store = useUserStore()
 const router = useRouter()
 const notice = ref('')
 const error = ref('')
+// 改密成功后延时跳登录页的定时器句柄
+let redirectTimer = null
 
 const profile = reactive({ realName: '', gender: '', phone: '', email: '', avatar: '', studentNo: '' })
 const pwd = reactive({ oldPassword: '', newPassword: '', confirm: '' })
@@ -52,7 +54,9 @@ async function changePassword() {
     // 后端改密后会话已作废，这里同步清掉本地状态并回登录页
     notice.value = '密码修改成功，请重新登录'
     store.clear()
-    setTimeout(() => router.push('/login'), 800)
+    // 定时器必须留句柄并在离开页面时清掉：否则用户在这 800ms 内点了别的菜单，
+    // 还是会被强行拽回登录页
+    redirectTimer = setTimeout(() => router.push('/login'), 800)
   } catch (e) {
     error.value = e.message
   }
@@ -61,6 +65,15 @@ async function changePassword() {
 onMounted(async () => {
   await store.load()
   fillProfile()
+})
+
+// 会话此刻已在后端作废，即使被清掉跳转，任何一次请求都会由 401 拦截器送回登录页，
+// 所以清理定时器不会把用户留在一个已经失效的页面上。
+onBeforeUnmount(() => {
+  if (redirectTimer) {
+    clearTimeout(redirectTimer)
+    redirectTimer = null
+  }
 })
 </script>
 

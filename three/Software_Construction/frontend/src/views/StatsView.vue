@@ -3,8 +3,14 @@
 // 数据全部来自 GET /api/stats/dashboard，一次请求拿全，避免瀑布式请求
 import { ref, computed, onMounted } from 'vue'
 import ChartBox from '../components/ChartBox.vue'
-import { exportExcel, exportPdf, formatTime } from '../utils/index'
+import { exportExcel, exportPdf, fetchAllPages, formatTime } from '../utils/index'
 import { statsApi, speciesApi, observationApi } from '../api/index'
+import { useUserStore } from '../store/user'
+
+// 表 3-2「导出 Excel / PDF」是 √ √ × ×：学生与公众没有导出权。
+// 导出纯在浏览器里生成、后端没有对应接口，所以这两个按钮本身就是唯一的闸门，
+// 必须按角色隐藏，不能只靠「学生看不到统计页」这种间接效果。
+const store = useUserStore()
 
 const loading = ref(false)
 const data = ref(null)
@@ -101,25 +107,12 @@ async function load() {
   }
 }
 
-// 导出：按 total 分页拉全量记录交给通用工具生成 .xlsx（page 是 0 基）
-// 注意不能只取第一页：后端 PageResult 会把 size 夹到上限 100，
-// 物种超过 100 条时只导第一页等于静默丢数据，用户不会收到任何提示。
-async function fetchAllPages(listFn, params) {
-  const first = await listFn({ ...params, page: 0, size: 100 })
-  const all = [...(first.records || [])]
-  const total = first.total || 0
-  const pages = Math.ceil(total / 100)
-  for (let p = 1; p < pages; p++) {
-    const next = await listFn({ ...params, page: p, size: 100 })
-    all.push(...(next.records || []))
-  }
-  return all
-}
+// 导出：交给 utils 里的 fetchAllPages 分页拉全量（含 total 换算与 size=100 的夹值约定）
 
 async function exportSpecies() {
   try {
     const records = await fetchAllPages(speciesApi.list, {})
-    exportExcel('物种信息统计', '物种', [
+    await exportExcel('物种信息统计', '物种', [
       { header: '中文名', key: 'chineseName', width: 16 },
       { header: '学名', key: 'scientificName', width: 22 },
       { header: '门', key: 'phylum', width: 12 },
@@ -141,7 +134,7 @@ async function exportSpecies() {
 async function exportObservations() {
   try {
     const records = await fetchAllPages(observationApi.list, {})
-    exportExcel('观测记录统计', '观测记录', [
+    await exportExcel('观测记录统计', '观测记录', [
       { header: '观测时间', key: 'observeTime', width: 20 },
       { header: '生态系统', key: 'ecosystemName', width: 16 },
       { header: '观测地点', key: 'locationName', width: 22 },
@@ -174,9 +167,9 @@ onMounted(load)
       </div>
       <div class="page__actions">
         <button class="btn" @click="load">刷新</button>
-        <button class="btn btn--ghost" @click="exportSpecies">导出物种 Excel</button>
-        <button class="btn btn--ghost" @click="exportObservations">导出观测 Excel</button>
-        <button class="btn btn--ghost" @click="exportPdf">打印 / 导出 PDF</button>
+        <button v-if="store.canEdit" class="btn btn--ghost" @click="exportSpecies">导出物种 Excel</button>
+        <button v-if="store.canEdit" class="btn btn--ghost" @click="exportObservations">导出观测 Excel</button>
+        <button v-if="store.canEdit" class="btn btn--ghost" @click="exportPdf">打印 / 导出 PDF</button>
       </div>
     </div>
 
@@ -201,7 +194,8 @@ onMounted(load)
       <div v-show="activeTab === 'observation'" class="chart-grid">
         <div class="chart chart--wide"><ChartBox :option="ecosystemOption" /></div>
         <div class="chart chart--wide"><ChartBox :option="monthlyOption" /></div>
-        <div class="chart chart--wide"><ChartBox :option="observerOption" /></div>
+        <!-- 后端只把观测人活跃度发给管理员与科研人员（里面是真实姓名），学生看不到这个键 -->
+        <div v-if="data.observerStats" class="chart chart--wide"><ChartBox :option="observerOption" /></div>
       </div>
     </template>
   </div>

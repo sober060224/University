@@ -13,25 +13,39 @@ public final class AuthForms {
     private AuthForms() {
     }
 
+    /**
+     * 登录。两个字段都必须给长度上限：这是系统上少数几个 permitAll 的接口之一，
+     * 不限长的话一个请求体就能塞进几十 MB 的口令，白白烧掉一次 BCrypt 计算和一次
+     * 请求体解析——而数据库里的 username 只有 VARCHAR(50)，超长必然写不进也读不出。
+     */
     public record Login(
-            @NotBlank(message = "请输入用户名") String username,
-            @NotBlank(message = "请输入密码") String password) {
+            @NotBlank(message = "请输入用户名")
+            @Size(max = 50, message = "用户名长度不能超过 50 个字符") String username,
+            @NotBlank(message = "请输入密码")
+            @Size(max = 100, message = "密码长度不能超过 100 个字符") String password) {
     }
 
     /**
      * 注册申请。applyRole 只能申请 STUDENT 或 PUBLIC，
      * RESEARCHER 与 ADMIN 必须由管理员在审核时另行授予。
+     *
+     * <p>{@code @Size} 一律写中文 message：不写就走校验框架的默认值
+     * 「个数必须在0和20之间」，既没说清是哪个字段，「个数」对字符串而言也不是长度；
+     * 而 GlobalExceptionHandler 会把多个字段的消息用「；」拼成一句，
+     * 只看到一串「个数必须在0和N之间」的用户无法知道该改哪一格。
      */
     public record Register(
             @NotBlank(message = "请输入用户名")
             @Size(min = 3, max = 50, message = "用户名长度需在 3 到 50 个字符之间") String username,
             @NotBlank(message = "请输入密码")
             @Size(min = 6, max = 50, message = "密码长度不能少于 6 位") String password,
-            @NotBlank(message = "请输入姓名") @Size(max = 50) String realName,
+            @NotBlank(message = "请输入姓名")
+            @Size(max = 50, message = "姓名长度不能超过 50 个字符") String realName,
             @NotBlank(message = "请选择申请身份") String applyRole,
-            @Size(max = 20) String phone,
-            @Email(message = "邮箱格式不正确") @Size(max = 100) String email,
-            @Size(max = 30) String studentNo) {
+            @Size(max = 20, message = "手机号长度不能超过 20 个字符") String phone,
+            @Email(message = "邮箱格式不正确")
+            @Size(max = 100, message = "邮箱长度不能超过 100 个字符") String email,
+            @Size(max = 30, message = "学号长度不能超过 30 个字符") String studentNo) {
     }
 
     /**
@@ -41,16 +55,17 @@ public final class AuthForms {
      */
     public record Approve(
             @NotNull(message = "请选择审核结果") Boolean approved,
-            @Size(max = 20) String role) {
+            @Size(max = 20, message = "角色长度不能超过 20 个字符") String role) {
     }
 
     public record Profile(
-            @Size(max = 50) String realName,
-            @Size(max = 10) String gender,
-            @Size(max = 20) String phone,
-            @Email(message = "邮箱格式不正确") @Size(max = 100) String email,
-            @Size(max = 255) String avatar,
-            @Size(max = 30) String studentNo) {
+            @Size(max = 50, message = "姓名长度不能超过 50 个字符") String realName,
+            @Size(max = 10, message = "性别长度不能超过 10 个字符") String gender,
+            @Size(max = 20, message = "手机号长度不能超过 20 个字符") String phone,
+            @Email(message = "邮箱格式不正确")
+            @Size(max = 100, message = "邮箱长度不能超过 100 个字符") String email,
+            @Size(max = 255, message = "头像地址长度不能超过 255 个字符") String avatar,
+            @Size(max = 30, message = "学号长度不能超过 30 个字符") String studentNo) {
     }
 
     public record ChangePassword(

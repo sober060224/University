@@ -161,23 +161,55 @@ function nameOf(id) {
 
 onMounted(async () => {
   // 物种列表接口返回分页对象，这里只取 records，避免把 { records, total } 当数组用
-  const [eco, sp] = await Promise.all([ecosystemApi.list(), speciesApi.list({ size: 100 })])
-  ecosystems.value = eco
-  species.value = sp.records || []
+  //
+  // 两个下拉必须各自成立，且都不能阻断后面的回填：
+  // 原来用 Promise.all，任一请求失败整个 onMounted 就抛出，
+  // 于是编辑一条已有记录时详情根本不会被读取，form 还停在 blank() 的默认值上
+  // （观测时间是「此刻」、关联物种为空），页面看起来和新增一模一样。
+  // 用户在这个假表单上点保存，等于凭空多出一条重复记录。
+  const [eco, sp] = await Promise.allSettled([
+    ecosystemApi.list(),
+    speciesApi.list({ size: 100 })
+  ])
+  if (eco.status === 'fulfilled') ecosystems.value = eco.value || []
+  if (sp.status === 'fulfilled') species.value = sp.value?.records || []
+  const failed = [eco, sp].filter((r) => r.status === 'rejected').map((r) => r.reason.message)
+  if (failed.length) {
+    alert(`下拉选项加载失败：${failed.join('；')}`)
+  }
+
   if (isEdit) {
-    const data = await observationApi.detail(route.params.id)
-    const o = data.observation
-    Object.keys(form).forEach((k) => {
-      if (o[k] !== null && o[k] !== undefined) form[k] = o[k]
-    })
-    form.observeTime = toInputTime(o.observeTime)
-    links.value = data.species.map((s) => ({
-      speciesId: s.speciesId, count: s.count, behavior: s.behavior, note: s.note
-    }))
+    try {
+      const data = await observationApi.detail(route.params.id)
+      const o = data.observation
+      Object.keys(form).forEach((k) => {
+        if (o[k] !== null && o[k] !== undefined) form[k] = o[k]
+      })
+      form.observeTime = toInputTime(o.observeTime)
+      links.value = data.species.map((s) => ({
+        speciesId: s.speciesId, count: s.count, behavior: s.behavior, note: s.note
+      }))
+    } catch (e) {
+      // 读不到原记录就绝不能停在这一页：接着编辑下去，保存的是一张空表单
+      alert(`读取观测记录失败：${e.message}`)
+      router.push('/observations')
+    }
   }
 })
 
 function addLink() {
+  // 没选物种就点「添加物种」会插进一条 speciesId 为 null 的空行：
+  // 提交时被嵌套校验挡下，弹出的提示是「请选择物种」，但用户面对的是一张多出来的空行，
+  // 不知道是哪一条、也删不掉刚加的那条；智能标签功能还会把 nameOf() 兜底返回的数字 id
+  // 当成物种名发给大模型。
+  if (!pickId.value) {
+    alert('请先在下拉框中选择一个物种')
+    return
+  }
+  if (used.value.has(pickId.value)) {
+    alert('这个物种已经在关联列表里了')
+    return
+  }
   links.value.push({ speciesId: pickId.value, count: 1, behavior: '', note: '' })
   pickId.value = null
 }
@@ -193,7 +225,11 @@ async function analyze() {
       longitude: form.longitude,
       latitude: form.latitude,
       ecosystemName: (ecosystems.value.find((e) => e.id === form.ecosystemId) || {}).name,
-      speciesNames: links.value.map((l) => nameOf(l.speciesId))
+      // nameOf 查不到时会兜底返回数字 id，直接发给大模型就是拿「17」当物种名，
+      // 它只会对着一个数字编标签。这里只送真正解析出名字的物种。
+      speciesNames: links.value
+              .map((l) => nameOf(l.speciesId))
+              .filter((name) => typeof name === 'string' && name.trim())
     })
     // 接口返回 { tags, warnings, summary, raw }
     analysis.value = res

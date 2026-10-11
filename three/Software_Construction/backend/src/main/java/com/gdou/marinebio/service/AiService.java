@@ -9,6 +9,7 @@ import com.gdou.marinebio.common.PageResult;
 import com.gdou.marinebio.dto.AuthForms;
 import com.gdou.marinebio.entity.AiRecord;
 import com.gdou.marinebio.entity.AiType;
+import com.gdou.marinebio.entity.Ecosystem;
 import com.gdou.marinebio.entity.Species;
 import com.gdou.marinebio.repository.AiRecordRepository;
 import com.gdou.marinebio.repository.ChatMessageRepository;
@@ -36,6 +37,24 @@ import java.util.Map;
 public class AiService {
 
     private static final ObjectMapper MAPPER = new ObjectMapper();
+
+    /** 交给大模型做上下文的数据条数上限，同时也是各类检索的 size 上限 */
+    private static final int CONTEXT_LIMIT = 8;
+
+    /** 整段候选词的长度上限；超过这个长度的整段几乎不可能是物种名 */
+    private static final int WHOLE_TOKEN_MAX = 12;
+    /** 滑窗片段的最长长度：中文物种名与地点名的常见区间是 2~4 字 */
+    private static final int FRAGMENT_MAX = 4;
+    /** 候选词总数上限，避免一个长问题驱动任意多次数据库往返 */
+    private static final int KEYWORD_LIMIT = 24;
+
+    /**
+     * ai_records.result 的写入上限。该列是 TEXT，上限 65535 <b>字节</b>而不是字符：
+     * utf8mb4 下一个汉字最多占 3~4 字节，按字符截到 16000 才能保证放得下。
+     * 请求里没有 max_tokens，模型一旦放飞就远超这个量，而超长 INSERT 会被拒、
+     * saveRecord 的 catch 只留一行 warn —— 又变成「调用成功但审计日志少一行」。
+     */
+    private static final int RESULT_MAX = 16000;
 
     private static final String TAXONOMY_PROMPT = """
             你是一位海洋生物学领域的分类学专家。请根据用户给出的物种中文名或学名，补全该物种的分类信息。
@@ -71,15 +90,21 @@ public class AiService {
     private final ChatMessageRepository chatMessageRepository;
     private final SpeciesService speciesService;
     private final ObservationService observationService;
+    /** 问答上下文要按「问题里点名的生态系统」定位观测记录，所以需要直接读生态系统 */
+    private final EcosystemService ecosystemService;
 
     // ========== 能力一：图像智能识别与物种鉴定 ==========
 
     public Map<String, Object> identify(AuthForms.Identify form, LoginUser user) {
         long start = System.currentTimeMillis();
-        String raw = client.chatVision(IDENTIFY_PROMPT, form.imageUrl());
+        String raw = callOrLog(user, AiType.IDENTIFY, null, form.imageUrl(), client.visionModel(), start,
+                () -> client.chatVision(IDENTIFY_PROMPT, form.imageUrl()));
         JsonNode node = parseJson(raw);
         String chineseName = node.path("chineseName").asText("");
-        double confidence = node.path("confidence").asDouble(0);
+        // 提示词要求模型给 0~1 的小数，但模型并不总是照做：偶尔会直接写 85 表示 85%。
+        // 原样存进 ai_records.confidence、原样发给前端，界面就会显示「8500%」，
+        // 置信度的分档着色与阈值判断也全部失真。这里统一夹回 [0,1]。
+        double confidence = Math.max(0.0, Math.min(1.0, node.path("confidence").asDouble(0)));
 
         // 把模型给出的名字回查本库已有物种记录，供用户一键关联（置信度低时给候选列表）
         List<Map<String, Object>> candidates = new ArrayList<>();
@@ -116,7 +141,8 @@ public class AiService {
 
     public Map<String, Object> complete(AuthForms.Complete form, LoginUser user) {
         long start = System.currentTimeMillis();
-        String raw = client.chatText(TAXONOMY_PROMPT, "物种名称：" + form.name());
+        String raw = callOrLog(user, AiType.COMPLETE, form.name(), null, client.textModel(), start,
+                () -> client.chatText(TAXONOMY_PROMPT, "物种名称：" + form.name()));
         JsonNode node = parseJson(raw);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -152,7 +178,8 @@ public class AiService {
             context.append('\n');
         }
 
-        String raw = client.chatText(TAG_PROMPT, context.toString());
+        String raw = callOrLog(user, AiType.TAG, context.toString(), null, client.textModel(), start,
+                () -> client.chatText(TAG_PROMPT, context.toString()));
         JsonNode node = parseJson(raw);
 
         Map<String, Object> result = new LinkedHashMap<>();
@@ -183,7 +210,8 @@ public class AiService {
         // 放在 @Transactional 里会占住一个连接池连接最长约 98 秒；
         // 连接池只有 10 个，10 个人同时提问就把整个应用拖死了（包括登录接口）。
         // 这里也不需要事务：chatText 只是纯 HTTP 调用，两个 save 各自自带事务。
-        String answer = client.chatText(QA_PROMPT, "用户检索到的系统数据：\n" + context + "\n\n问题：" + question);
+        String answer = callOrLog(user, AiType.QA, question, null, client.textModel(), start,
+                () -> client.chatText(QA_PROMPT, "用户检索到的系统数据：\n" + context + "\n\n问题：" + question));
 
         ChatMessage ask = new ChatMessage();
         ask.setUserId(user.getId());
@@ -219,8 +247,9 @@ public class AiService {
 
     public Map<String, Object> translate(AuthForms.Translate form, LoginUser user) {
         long start = System.currentTimeMillis();
-        String raw = client.chatText(TRANSLATE_PROMPT,
-                "目标语言：" + form.targetLanguage() + "\n\n原文：\n" + form.text());
+        String raw = callOrLog(user, AiType.TRANSLATE, form.text(), null, client.textModel(), start,
+                () -> client.chatText(TRANSLATE_PROMPT,
+                        "目标语言：" + form.targetLanguage() + "\n\n原文：\n" + form.text()));
         saveRecord(user, AiType.TRANSLATE, form.text(), null, raw, null, null,
                 client.textModel(), System.currentTimeMillis() - start, true);
         return Map.of("text", raw, "targetLanguage", form.targetLanguage());
@@ -233,6 +262,25 @@ public class AiService {
         return aiRecordRepository.findByUserId(userId, pageable);
     }
 
+    /**
+     * 调大模型，失败时先落一条 success=false 的记录再把异常抛回去。
+     *
+     * <p>原来五个能力都是「调用成功才写日志」，且写进去的 success 一律是硬编码的 true。
+     * 于是 ai_records 里永远只有成功行：超时、鉴权失败、上游 4xx 全部凭空消失，
+     * success 这一列恒为真、不携带任何信息。而非功能性需求要求这张表「便于追溯与质量分析」——
+     * 看不出失败率的日志无法做质量分析。失败原因存进 result，排查时能直接看到上游返回体。
+     */
+    private String callOrLog(LoginUser user, AiType type, String inputText, String inputImage,
+                             String model, long start, java.util.function.Supplier<String> call) {
+        try {
+            return call.get();
+        } catch (RuntimeException e) {
+            saveRecord(user, type, inputText, inputImage, e.getMessage(), null, null, model,
+                    System.currentTimeMillis() - start, false);
+            throw e;
+        }
+    }
+
     private void saveRecord(LoginUser user, AiType type, String inputText, String inputImage,
                             String result, Double confidence, Integer targetSpeciesId,
                             String model, long costMs, boolean success) {
@@ -240,13 +288,18 @@ public class AiService {
             AiRecord record = new AiRecord();
             record.setUserId(user == null ? null : user.getId());
             record.setType(type);
-            record.setInputText(inputText);
-            record.setInputImage(inputImage);
-            record.setResult(result);
+            // analyze 传给这里的是一整段拼接出来的观测上下文（时间、地点、经纬度、
+            // 生态系统，外加最多 50 个物种名及其分布区域），长度远超 input_text 的
+            // VARCHAR(1000)。超长的 INSERT 会被 MySQL 拒绝，而下面的 catch 只记一条
+            // warn，于是「调用大模型成功但审计日志凭空少一行」——非功能性需求明确要求
+            // 关键识别结果可追溯，所以这里按列宽截断，保证这一行一定落库。
+            record.setInputText(cut(inputText, 1000));
+            record.setInputImage(cut(inputImage, 255));
+            record.setResult(cut(result, RESULT_MAX));
             record.setConfidence(confidence);
             record.setTargetSpeciesId(targetSpeciesId);
-            record.setModel(model);
-            record.setCostMs((int) costMs);
+            record.setModel(cut(model, 50));
+            record.setCostMs((int) Math.min(Math.max(costMs, Integer.MIN_VALUE), Integer.MAX_VALUE));
             record.setSuccess(success);
             aiRecordRepository.save(record);
         } catch (Exception e) {
@@ -255,54 +308,97 @@ public class AiService {
         }
     }
 
+    /** 按字符数截断，超长时保留前 max 个字符并留一个省略号标记 */
+    private static String cut(String value, int max) {
+        if (value == null || value.length() <= max) {
+            return value;
+        }
+        return value.substring(0, max - 1) + "…";
+    }
+
     // ========== 工具方法 ==========
 
     /**
-     * 从自然语言问题里挑出可用于检索的关键词。
+     * 从自然语言问题里挑出可用于「正向 like」的候选词。
      *
-     * <p>检索语句是 {@code like %keyword%}，直接拿整句去匹配基本永远命中不了：
-     * 「红树林里招潮蟹的分布情况如何」拿去比对 chinese_name 是匹配不到任何物种的。
-     * 这里按标点与常见提问词切分，逐个尝试，取第一个有结果的。
+     * <p>这只剩兜底作用：问题里写了完整物种名时走 {@code findMentionedIn} 的反向匹配，
+     * 那才是自然语言点名实体的正确方向。这里负责的是另一种情况——用户只写了片段
+     * （「牡蛎」要能匹到「珍珠牡蛎」），此时必须把句子拆成足够短的候选词去 like 字段。
+     *
+     * <p>候选词有总数上限：每一次候选都会驱动一次数据库往返，不设上限等于让一个
+     * 长问题任意放大查询数。
      */
     private List<String> keywordsOf(String question) {
         List<String> candidates = new ArrayList<>();
-        String cleaned = question == null ? "" : question;
-        // 先放去掉提问词的主体，再放切分后的片段
-        for (String token : cleaned.split("[\\s,，。？?！!、；;：:（）()「」\"']+")) {
-            String t = token.trim();
-            if (t.length() < 2 || t.length() > 12) {
+        if (question == null || question.isBlank()) {
+            return candidates;
+        }
+        // 去掉「如何」「怎么样」「是什么」这类提问尾巴：它们不是物种名的一部分
+        for (String token : question.split("[\\s,，。？?！!、；;：:（）()「」\"']+")) {
+            String t = token.replaceAll("(如何|怎么样|怎样|是什么|多少|请问|介绍|查询|搜索|有哪些|变化趋势|情况)+$", "").trim();
+            if (t.length() < 2) {
                 continue;
             }
-            // 去掉「如何」「怎么样」「是什么」这类尾巴，它们不是物种名的一部分
-            String stripped = t.replaceAll("(如何|怎么样|怎样|是什么|多少|请问|介绍|查询|搜索)+$", "");
-            if (stripped.length() >= 2 && !candidates.contains(stripped)) {
-                candidates.add(stripped);
-            }
-            if (!candidates.contains(t)) {
+            // 整段先试一次：长度合理的整段最可能就是用户直接写的名字
+            if (t.length() <= WHOLE_TOKEN_MAX && !candidates.contains(t)) {
                 candidates.add(t);
             }
-        }
-        if (candidates.isEmpty() && !cleaned.isBlank()) {
-            candidates.add(cleaned.trim());
+            // 再补 2~4 字的滑窗片段。中文物种名与地点名基本落在这个区间，
+            // 「牡蛎」这类片段要能匹到「珍珠牡蛎」只能靠它。
+            //
+            // 原来这里写的是「长度超过 12 的整段直接丢弃」，长问题于是候选数为零，
+            // 最后兜底把整句原样拿去 `字段 like %整句%`——字段只有 5 个字、问题有 20 个字，
+            // 必然匹配不上。两个缺陷叠加，等于长问题恒定检索不到数据。
+            for (int len = FRAGMENT_MAX; len >= 2; len--) {
+                for (int i = 0; i + len <= t.length(); i++) {
+                    if (candidates.size() >= KEYWORD_LIMIT) {
+                        return candidates;
+                    }
+                    String gram = t.substring(i, i + len);
+                    if (!candidates.contains(gram)) {
+                        candidates.add(gram);
+                    }
+                }
+            }
         }
         return candidates;
     }
 
     private String buildContext(String question, Role role) {
         StringBuilder sb = new StringBuilder();
-        // 物种检索：逐个关键词试，取第一个有结果的
-        List<Species> species = List.of();
-        for (String kw : keywordsOf(question)) {
-            species = speciesService.search(role, kw, null, null, null, null,
-                    org.springframework.data.domain.Pageable.ofSize(8)).getRecords();
-            if (!species.isEmpty()) {
-                break;
+
+        // 物种检索：先做反向实体链接（这句问题里写了哪个已登记物种的名字），
+        // 没命中再退回正向关键词 like——用户只写「牡蛎」这种片段时还要能匹到「珍珠牡蛎」。
+        //
+        // 原来只有正向一条路：把整句问题当关键词去「字段 like %问题%」。字段只有 5 个字、
+        // 问题有 20 个字，永远匹配不上；而 keywordsOf 又把超过 12 字的整句直接丢掉。
+        // 于是 ChatView 界面上那三个示例问题一个都检索不到数据，模型只能对着
+        // 「（无匹配记录）」作答，报告 5.17 承诺的「回答中的数据均可回溯到系统内的真实记录」
+        // 落不了地。
+        List<Species> species = speciesService.findMentionedIn(question, role, CONTEXT_LIMIT);
+        String speciesHitBy = null;
+        if (species.isEmpty()) {
+            for (String kw : keywordsOf(question)) {
+                species = speciesService.search(role, kw, null, null, null, null,
+                        org.springframework.data.domain.Pageable.ofSize(CONTEXT_LIMIT)).getRecords();
+                if (!species.isEmpty()) {
+                    speciesHitBy = kw;
+                    break;
+                }
             }
         }
         sb.append("【物种数据】\n");
         if (species.isEmpty()) {
             sb.append("（无匹配记录）\n");
         } else {
+            // 实测：问「中国鲎的分布情况如何」时库里没有鲎，滑窗片段「中国」却命中了「中国对虾」，
+            // 上下文于是把风马牛不相及的物种当成答案依据交出去，模型只好半答半拒。
+            // 停用词表治不了这个（「湛江」这类地名同样是 2 字片段，却确有必要留着），
+            // 所以改为如实标注来源：把实际用到的检索片段写给模型，让它自己说明库中没有该物种。
+            if (speciesHitBy != null) {
+                sb.append("（注意：以下记录是用问题片段「").append(speciesHitBy)
+                        .append("」模糊检索得到的，不代表用户点名的物种在本库中存在）\n");
+            }
             for (var s : species) {
                 sb.append("- ").append(s.getChineseName());
                 if (s.getScientificName() != null) {
@@ -317,27 +413,37 @@ public class AiService {
         }
 
         sb.append("\n【观测记录】\n");
-        // 观测同样按关键词检索。原来是无序 findAllWithEcosystem() 取前 10 条，
-        // 完全不看问题，捞出来的是任意 10 条记录，等于把无关数据当依据交给模型。
         List<Map<String, Object>> observations = List.of();
-        for (String kw : keywordsOf(question)) {
-            observations = observationService
-                    .search(null, null, null, kw, null, null, PageResult.of(0, 10, 100, null))
-                    .getRecords().stream().map(o -> {
-                        Map<String, Object> item = new LinkedHashMap<>();
-                        item.put("observeTime", o.getObserveTime());
-                        item.put("locationName", o.getLocationName());
-                        item.put("ecosystem", o.getEcosystem() == null ? "未指定" : o.getEcosystem().getName());
-                        item.put("speciesCount", "若干");
-                        return item;
-                    }).toList();
-            if (!observations.isEmpty()) {
-                break;
+        // 1) 问题点到了具体物种，就顺着关联关系取该物种的观测记录
+        if (!species.isEmpty()) {
+            observations = searchObservations(null, species.get(0).getId().longValue(), null, role);
+        }
+        // 2) 问题点到的是生态系统（「请总结红树林生态系统中物种数量的变化趋势」）。
+        //    这句话里没有任何物种名，地点名又比问题长，只有按生态系统名反向匹配再过滤才落得下去。
+        if (observations.isEmpty()) {
+            Ecosystem ecosystem = ecosystemService.findMentionedIn(question);
+            if (ecosystem != null) {
+                observations = searchObservations(ecosystem.getId().longValue(), null, null, role);
+            }
+        }
+        // 3) 前两条都没结果才退回按地点关键词检索
+        String observationsHitBy = null;
+        if (observations.isEmpty()) {
+            for (String kw : keywordsOf(question)) {
+                observations = searchObservations(null, null, kw, role);
+                if (!observations.isEmpty()) {
+                    observationsHitBy = kw;
+                    break;
+                }
             }
         }
         if (observations.isEmpty()) {
             sb.append("（无匹配记录）\n");
         } else {
+            if (observationsHitBy != null) {
+                sb.append("（注意：以下记录是用问题片段「").append(observationsHitBy)
+                        .append("」模糊检索得到的，可能与用户问的地点无关）\n");
+            }
             for (var o : observations) {
                 sb.append("- ").append(nullToEmpty(o.get("observeTime"))).append(" 在 ")
                         .append(nullToEmpty(o.get("locationName")))
@@ -346,6 +452,29 @@ public class AiService {
             }
         }
         return sb.toString();
+    }
+
+    /** 观测记录的三个检索入口共用这一段映射，避免同一份拼装逻辑抄三遍 */
+    private List<Map<String, Object>> searchObservations(Long ecosystemId, Long speciesId,
+                                                         String keyword, Role role) {
+        return observationService
+                .search(role, ecosystemId, null, speciesId, blankToNull(keyword), null, null,
+                        PageResult.of(0, CONTEXT_LIMIT, 100, null))
+                .getRecords().stream().map(o -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("observeTime", o.getObserveTime());
+                    item.put("locationName", o.getLocationName());
+                    item.put("ecosystem", o.getEcosystem() == null ? "未指定" : o.getEcosystem().getName());
+                    // 原来这里写死「若干」，交给模型的是一个占位词，模型只好把它编成一个数字。
+                    // 计数走 listLinkedSpecies(role)：未公开物种对非特权角色会被遮蔽成占位条目，
+                    // 数的是过滤后可见的条数，不会反过来泄露看不到的记录数。
+                    item.put("speciesCount", observationService.listLinkedSpecies(o.getId(), role).size());
+                    return item;
+                }).toList();
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /** 优先用模型给的中文名，再用候选列表去回查本库。 */

@@ -62,9 +62,18 @@ public class LoginUser implements UserDetails {
         return true;
     }
 
+    /**
+     * 只有审核通过（ACTIVE）的账号才算「可用」。
+     *
+     * <p>Spring Security 6 默认把 isEnabled() 放在 pre-checks，也就是口令校验**之前**，
+     * 直接依赖默认行为会让匿名调用者靠回显差异枚举出存在的用户名。
+     * 本项目的 {@code SecurityConfig#authenticationProvider} 因此清空了 pre-checks
+     * 并把这道判断移到 post-checks，让「状态不可用」只在口令正确时才说得出。
+     * 改这里之前请先看那边的注释：两步缺一不可。
+     */
     @Override
     public boolean isEnabled() {
-        return true;
+        return status == UserStatus.ACTIVE;
     }
 
     /** 从当前认证上下文取用户 id；未登录返回 null */

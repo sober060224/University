@@ -11,11 +11,16 @@
     </div>
 
     <div class="card">
+      <!-- 统计接口失败时不能只显示 0：必须把「没取到」这件事说出来 -->
+      <div v-if="statsError" class="alert alert--warn">
+        观测统计暂时取不到（{{ statsError }}），下面两列显示为「—」，不代表这些生态系统没有观测记录。
+      </div>
       <div class="table-wrap">
         <table class="table">
           <thead>
             <tr>
-              <th>编号</th><th>名称</th><th>代码</th><th>观测次数</th><th>发现物种数</th>
+              <th>编号</th><th>名称</th><th>代码</th>
+              <th v-if="showCounts">观测次数</th><th v-if="showCounts">发现物种数</th>
               <th>说明</th><th v-if="store.canEdit">操作</th>
             </tr>
           </thead>
@@ -24,8 +29,8 @@
               <td>{{ row.id }}</td>
               <td>{{ row.name }}</td>
               <td><code>{{ row.code || '—' }}</code></td>
-              <td>{{ row.observationCount }}</td>
-              <td>{{ row.speciesCount }}</td>
+              <td v-if="showCounts">{{ row.observationCount ?? '—' }}</td>
+              <td v-if="showCounts">{{ row.speciesCount ?? '—' }}</td>
               <td class="muted">{{ row.description || '—' }}</td>
               <td v-if="store.canEdit">
                 <div class="table__actions">
@@ -35,7 +40,7 @@
               </td>
             </tr>
             <tr v-if="!rows.length">
-              <td class="table__empty" :colspan="store.canEdit ? 7 : 6">{{ loadError || '暂无数据' }}</td>
+              <td class="table__empty" :colspan="colspan">{{ loadError || '暂无数据' }}</td>
             </tr>
           </tbody>
         </table>
@@ -67,23 +72,56 @@
 </template>
 
 <script setup>
-import { ref, reactive, onMounted } from 'vue'
+import { ref, reactive, computed, onMounted } from 'vue'
 import { ecosystemApi } from '../api'
 import { useUserStore } from '../store/user'
 
 const store = useUserStore()
-// /api/ecosystems/stats 一次返回名称 + 观测次数 + 发现物种数，列表页直接用这份数据，
-// 不用再发一次 list 请求然后在前端拼。
+// 名称 / 代码 / 说明来自公开的 /api/ecosystems，观测次数与发现物种数来自
+// /api/ecosystems/stats，两者按 id 合并成一张表。
+//
+// 原来这张表整个由 stats 一个接口驱动，有两个后果：
+// 其一，stats 的返回里根本没有 code 与 description，于是「代码」「说明」两列
+// 对任何角色都恒定显示「—」（open() 里那句注释正是在绕这个坑）；
+// 其二，权限矩阵把统计类接口对公众标为 ×，后端也已经拦下，
+// 公众进这一页就只会看到「加载失败：当前角色没有执行该操作的权限」，
+// 连本来就公开的生态系统名称也看不成了。
 const rows = ref([])
 const loadError = ref('')
+const statsError = ref('')
 const editing = ref(false)
+// 观测次数 / 物种数属于统计，公众不请求也不渲染这两列
+const showCounts = computed(() => store.canViewStats)
+// 统计列对公众隐藏，空行的 colspan 必须跟着变，否则「暂无数据」会溢出表格外
+const colspan = computed(() => 4 + (showCounts.value ? 2 : 0) + (store.canEdit ? 1 : 0))
 const form = reactive({ id: null, name: '', code: '', description: '' })
 
 onMounted(load)
 
 async function load() {
   try {
-    rows.value = await ecosystemApi.stats()
+    statsError.value = ''
+    const [list, stats] = await Promise.all([
+      ecosystemApi.list(),
+      // 统计拉不动也不能让整页失败：名称列表是公开数据，照常显示。
+      // 但失败必须记下来——见下面 observationCount 的赋值，不能把它伪装成 0。
+      showCounts.value
+          ? ecosystemApi.stats().catch((e) => {
+              statsError.value = e.message
+              return []
+            })
+          : Promise.resolve([])
+    ])
+    const countById = new Map((stats || []).map((s) => [s.id, s]))
+    const statsFailed = showCounts.value && statsError.value !== ''
+    rows.value = (list || []).map((item) => ({
+      ...item,
+      // 统计接口失败时显示 null（模板里渲染成 —），而不是 0：
+      // 0 会把「一次请求失败」伪装成「这个生态系统没有观测记录」，
+      // 而同文件下面的 catch 专门写了「失败不能显示成没有数据」，这里原先漏了一处。
+      observationCount: statsFailed ? null : (countById.get(item.id)?.observationCount ?? 0),
+      speciesCount: statsFailed ? null : (countById.get(item.id)?.speciesCount ?? 0)
+    }))
     loadError.value = ''
   } catch (e) {
     // 失败时不能停在「暂无数据」，那会把一次报错伪装成库里没有生态系统
@@ -94,15 +132,14 @@ async function load() {
 
 async function open(row) {
   if (row) {
-    // 列表数据来自 /ecosystems/stats，只有 id/name/观测次数/物种数，没有 code 与 description。
-    // 直接 Object.assign 会把表单里的空串当成用户输入，保存时就把「说明」清空了，所以按 id 取一次完整记录。
-    try {
-      const { id, name, code, description } = await ecosystemApi.get(row.id)
-      Object.assign(form, { id, name, code, description })
-    } catch (e) {
-      alert(e.message)
-      return
-    }
+    // 现在这一行本身就带着 code 与 description，不必再回查一次详情。
+    // 另外必须把后端没有的字段归一成空串，否则 null 会被当成用户输入写回表单。
+    Object.assign(form, {
+      id: row.id,
+      name: row.name || '',
+      code: row.code || '',
+      description: row.description || ''
+    })
   } else {
     Object.assign(form, { id: null, name: '', code: '', description: '' })
   }

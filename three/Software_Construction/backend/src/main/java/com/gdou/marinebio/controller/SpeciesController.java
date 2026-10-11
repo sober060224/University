@@ -50,8 +50,8 @@ public class SpeciesController {
     }
 
     @GetMapping("/phylums")
-    public Result<List<String>> phylums() {
-        return Result.ok(speciesService.listPhylums());
+    public Result<List<String>> phylums(@AuthenticationPrincipal LoginUser loginUser) {
+        return Result.ok(speciesService.listPhylums(LoginUser.roleOf(loginUser)));
     }
 
     /** 模块四：物种分布地图数据点 */

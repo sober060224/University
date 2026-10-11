@@ -6,7 +6,7 @@ import { userApi } from '../api/index'
 import { useUserStore } from '../store/user'
 import Pagination from '../components/Pagination.vue'
 import { ROLE_NAMES } from '../store/user'
-import { formatTime, toApiPage } from '../utils/index'
+import { fetchAllPages, formatTime, toApiPage } from '../utils/index'
 
 const store = useUserStore()
 const notice = ref('')
@@ -35,9 +35,10 @@ async function load() {
     if (isAdmin.value) {
       list.value = await userApi.list({ ...filters, page: toApiPage(page.value), size })
       overview.value = await userApi.overview()
-      // 待审核列表固定取第一页，page 是 0 基
-      const res = await userApi.list({ status: 'PENDING', page: 0, size: 50 })
-      pending.value = res.records
+      // 待审核卡片原来固定取第一页的 50 条：申请一旦超过 50 条，多出来的部分在界面上
+      // 既看不见也审不了，而卡片标题的 ({{ pending.length }}) 会一直显示 50，
+      // 和旁边「待审核」概览卡里的真实数字自相矛盾。这里按 total 分页取全量。
+      pending.value = await fetchAllPages(userApi.list, { status: 'PENDING' })
     }
   } catch (e) {
     error.value = e.message
@@ -61,6 +62,35 @@ async function approve(user, approved) {
     notice.value = approved ? `已通过 ${user.username} 的注册申请` : `已拒绝 ${user.username} 的注册申请`
     load()
   } catch (e) {
+    error.value = e.message
+  }
+}
+
+// 报告 5.3 写的是「点击「通过」后弹出角色选择框，管理员可在四项中选择最终角色」，
+// 但实现里「通过」直接把 applicant 原本的申请身份确认下来，后端 approve 早就支持
+// 随请求带 role，界面却没有任何入口——管理员想在这一步直接授予科研人员就做不到，
+// 必须先通过、再回到列表里多点一次「分配角色」。
+const approveTarget = ref(null)
+
+function openApprove(user) {
+  error.value = ''
+  notice.value = ''
+  // 默认沿用申请人自己填的身份：绝大多数情况就是学生或公众，
+  // 管理员要改的话在这个下拉里换一下即可。
+  approveTarget.value = { id: user.id, username: user.username, role: user.role }
+}
+
+async function confirmApprove() {
+  const target = approveTarget.value
+  error.value = ''
+  try {
+    await userApi.approve(target.id, { approved: true, role: target.role })
+    notice.value = `已通过 ${target.username} 的注册申请，身份：${ROLE_NAMES[target.role]}`
+    approveTarget.value = null
+    load()
+  } catch (e) {
+    // 「系统至少需要保留一名在岗管理员」这类拒绝要留在页面上：
+    // 审核这一步现在能授予任意角色，后端那条保命判据同样会拦在这里。
     error.value = e.message
   }
 }
@@ -136,7 +166,7 @@ onMounted(async () => {
                 <td>{{ u.phone || u.email || '—' }}</td>
                 <td>{{ formatTime(u.createTime) }}</td>
                 <td class="table__actions">
-                  <button class="btn btn--sm" @click="approve(u, true)">通过</button>
+                  <button class="btn btn--sm" @click="openApprove(u)">通过</button>
                   <button class="btn btn--sm btn--danger" @click="approve(u, false)">拒绝</button>
                 </td>
               </tr>
@@ -218,6 +248,27 @@ onMounted(async () => {
 
     <div v-else class="alert alert--info">
       用户与权限管理页面的审核、角色分配功能仅对系统管理员开放。个人资料与密码请前往「个人资料」页面维护。
+    </div>
+
+    <!-- 审核通过时指定最终身份 -->
+    <div v-if="approveTarget" class="modal" @click.self="approveTarget = null">
+      <div class="modal__box">
+        <h3 class="modal__title">通过注册申请 —— {{ approveTarget.username }}</h3>
+        <div class="form-item">
+          <label class="form-item__label">最终身份</label>
+          <select v-model="approveTarget.role" class="select">
+            <option v-for="r in ROLE_OPTIONS" :key="r" :value="r">{{ ROLE_NAMES[r] }}</option>
+          </select>
+        </div>
+        <p class="form-item__hint">
+          默认沿用申请人自己填写的身份。改成科研人员或系统管理员后，该账号登录后即拥有对应权限；
+          系统会保证至少保留一名在岗管理员。
+        </p>
+        <div class="btn-group" style="margin-top: 14px">
+          <button class="btn" @click="confirmApprove">确认通过</button>
+          <button class="btn btn--ghost" @click="approveTarget = null">取消</button>
+        </div>
+      </div>
     </div>
 
     <!-- 分配角色 -->
