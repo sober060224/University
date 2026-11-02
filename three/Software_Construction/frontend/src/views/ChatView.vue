@@ -2,7 +2,7 @@
 // 模块五 能力四：智能问答与科研助手
 // 用户用自然语言提问，后端先把问题转成结构化查询去模块二/三检索数据，
 // 再把检索结果作为上下文交给大模型生成回答 —— 避免模型凭空编造物种数据。
-import { ref, nextTick, onMounted } from 'vue'
+import { ref, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { aiApi } from '../api/index'
 import { formatTime } from '../utils/index'
 
@@ -25,19 +25,27 @@ async function scrollToBottom() {
   }
 }
 
+// 历史记录与实时发送的两条写路径会互相覆盖：loadHistory 回包晚到时
+// messages.value = [...] 会把刚发出的提问与回答整体抹掉。序号丢弃过期回包。
+let historyToken = 0
+let sending = 0
+
 async function loadHistory() {
+  const token = ++historyToken
   try {
     const list = await aiApi.history()
     // 失败不能只留空数组：那会让空状态提示「先试试下面这些例子」，
     // 用户以为是自己第一次用，实际是历史记录没拉到。
+    if (token !== historyToken) return
+    // 用户在历史回包前已经发了新问题：把本地已有气泡接在后面，而不是覆盖
     messages.value = (list || []).map(m => ({
       role: m.role,
       content: m.content,
       time: formatTime(m.createTime)
-    }))
+    })).concat(sending ? messages.value.slice(-sending) : [])
     error.value = ''
   } catch (e) {
-    error.value = `历史记录加载失败：${e.message}`
+    if (token === historyToken) error.value = `历史记录加载失败：${e.message}`
   }
   scrollToBottom()
 }
@@ -50,6 +58,7 @@ async function send(text) {
   question.value = ''
   // 先把用户气泡渲染出来，等待感比等接口返回后再出现要好
   messages.value.push({ role: 'user', content: ask, time: formatTime(new Date().toISOString()) })
+  sending++
   scrollToBottom()
   try {
     const res = await aiApi.ask({ question: ask })
@@ -59,7 +68,9 @@ async function send(text) {
       time: formatTime(new Date().toISOString())
     })
   } catch (e) {
-    error.value = e.message
+    // 只写 error 会让这条提问悬空：会话里既没有回答也没有失败标记，
+    // 用户清掉错误提示后也无从重试。补一条可重试的失败气泡。
+    messages.value.push({ role: 'assistant', content: `回答失败：${e.message}`, time: formatTime(new Date().toISOString()), failed: true, retry: ask })
   } finally {
     asking.value = false
     scrollToBottom()
@@ -79,6 +90,12 @@ async function clearHistory() {
 }
 
 onMounted(loadHistory)
+
+// 卸载后回包仍会 push 到 messages 并操作已销毁的 DOM
+onBeforeUnmount(() => {
+  historyToken++
+  asking.value = false
+})
 </script>
 
 <template>
@@ -99,7 +116,8 @@ onMounted(loadHistory)
       <div ref="bodyEl" class="chat__body">
         <div v-if="!messages.length" class="chat__empty">
           <p>还没有对话记录。可以先试试下面这些例子：</p>
-          <button v-for="item in EXAMPLES" :key="item" class="chat__example" @click="send(item)">{{ item }}</button>
+          <button v-for="item in EXAMPLES" :key="item" type="button" class="chat__example"
+                  :disabled="asking" @click="send(item)">{{ item }}</button>
         </div>
         <div
           v-for="(m, i) in messages"

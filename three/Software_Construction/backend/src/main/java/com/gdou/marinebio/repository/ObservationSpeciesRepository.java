@@ -34,13 +34,32 @@ public interface ObservationSpeciesRepository extends JpaRepository<ObservationS
      * 又得靠 clearAutomatically 清上下文，而一清，context 里的 Observation.ecosystem
      * 就成了游离的 Hibernate 代理，返回给前端时 Jackson 直接报
      * No serializer found for class ByteBuddyInterceptor，整个响应 500。
+     *
+     * <p>代价是派生删除要先逐行加载（含 EAGER 的 species），一条关联 50 个物种的
+     * 观测编辑时会产生 1+50 条预 SELECT——@Size(max=50) 已把上限钉在 50，
+     * 单用户编辑自己记录的频率下这是常数级开销，不是缺陷。
      */
     void deleteByObservationId(Integer observationId);
 
     /** 某物种被多少条观测记录关联，删除物种前判断影响面用 */
     long countBySpeciesId(Integer speciesId);
 
-    /** 地图上要显示每条记录关联了几个物种，一次分组查询代替逐条查询 */
-    @Query("select os.observation.id, count(os.id) from ObservationSpecies os group by os.observation.id")
-    List<Object[]> countGroupByObservation();
+    /** 地图上要显示每条记录关联了几个物种，一次分组查询代替逐条查询。
+     *
+     * <p>seeAll 为 false 时只数已公开物种，理由见 ObservationService.mapPoints：
+     * 这个接口对已登录的任何角色开放，不带过滤就把隐藏物种的条数送给了公众。
+     */
+    @Query("select os.observation.id, count(os.id) from ObservationSpecies os "
+            + "join os.species s "
+            + "where (:seeAll = true or s.isPublic = true) "
+            + "group by os.observation.id")
+    List<Object[]> countGroupByObservation(@Param("seeAll") boolean seeAll);
+
+    /** 同上，但只数指定的一批观测：智能问答一次要 8 条记录的计数，逐条查就是 8 条 SQL */
+    @Query("select os.observation.id, count(os.id) from ObservationSpecies os "
+            + "join os.species s "
+            + "where os.observation.id in :ids and (:seeAll = true or s.isPublic = true) "
+            + "group by os.observation.id")
+    List<Object[]> countGroupByObservations(@Param("ids") List<Integer> ids,
+                                            @Param("seeAll") boolean seeAll);
 }

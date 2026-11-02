@@ -30,7 +30,8 @@
             <div class="auth__demo">
                 <strong>演示账号</strong>（种子数据，密码见 database.sql 注释）<br/>
                 管理员 admin / admin123　　科研人员 researcher / research123<br/>
-                学生 student / student123　　公众 visitor / public123
+                学生 student / student123　　公众 visitor / public123<br/>
+                <span class="muted">仅供本地演示与验收；部署到可被他人访问的环境前，必须先改掉这些密码并删掉本段。</span>
             </div>
         </div>
     </div>
@@ -62,6 +63,8 @@ onMounted(async () => {
 })
 
 async function onSubmit() {
+    // 按钮的 :disabled 要等下一帧，Enter 键与快速双击都能连发两次登录
+    if (loading.value) return
     if (!form.username || !form.password) {
         error.value = '请输入用户名和密码'
         return
@@ -72,7 +75,7 @@ async function onSubmit() {
         await store.login({ ...form })
         router.push(safeRedirect(route.query.redirect))
     } catch (e) {
-        error.value = e.message
+        error.value = e?.message || '登录失败，请稍后重试'
     } finally {
         loading.value = false
     }

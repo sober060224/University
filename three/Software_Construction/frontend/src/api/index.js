@@ -78,6 +78,8 @@ export const uploadApi = {
     image: (file) => {
         const form = new FormData()
         form.append('file', file)
-        return request.post('/upload', form, { headers: { 'Content-Type': 'multipart/form-data' } })
+        // 不要手动设 Content-Type：浏览器必须自己带上 multipart/form-data 的 boundary，
+        // 手写成固定值会把 boundary 抹掉，后端解析不出文件。
+        return request.post('/upload', form)
     }
 }

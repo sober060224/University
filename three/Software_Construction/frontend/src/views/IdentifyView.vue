@@ -22,6 +22,10 @@ const TYPE_NAMES = {
   TAG: '标签与异常检测', QA: '智能问答'
 }
 
+// 连续换图时，先发的上传（大图）可能后回包，盖掉后发请求的 imageUrl，
+// 界面显示 A 图、识别却用 B 图。用序号丢弃过期回包。
+let uploadToken = 0
+
 async function onFileChange(event) {
   const file = event.target.files[0]
   if (!file) return
@@ -29,18 +33,30 @@ async function onFileChange(event) {
     error.value = '图片不能超过 5MB'
     return
   }
+  // accept="image/*" 只是选择框的提示，用户可以切到「所有文件」或拖入任意文件；
+  // 不上传前先挡，否则一个改名的非图片会白花一次多模态调用再在后端报错
+  if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
+    error.value = '只支持 JPG / PNG / GIF / WebP 图片'
+    return
+  }
   error.value = ''
   // 上一次预览的 objectURL 必须显式释放，否则每次换图都会泄漏一份 Blob
   if (preview.value) {
     URL.revokeObjectURL(preview.value)
   }
+  // 旧图同时作废：否则上传失败时模板仍渲染已释放的 blob URL（破图），
+  // 而 imageUrl 还留着上一张的地址，用户点「开始识别」用的是与界面不一致的图。
+  preview.value = ''
+  imageUrl.value = ''
+  result.value = null
+  const token = ++uploadToken
   try {
     const res = await uploadApi.image(file)
+    if (token !== uploadToken) return
     imageUrl.value = res.url
     preview.value = URL.createObjectURL(file)
-    result.value = null
   } catch (e) {
-    error.value = e.message
+    if (token === uploadToken) error.value = e?.message || '上传失败，请稍后重试'
   }
 }
 
@@ -82,13 +98,20 @@ function confidenceLabel(value) {
   return '低'
 }
 
+// 分页/识别后刷新时旧回包会晚到，把旧记录写成当前页；且不能复用页面级的 error，
+// 否则识别成功旁边会挂着「加载记录失败」。序号丢弃过期回包。
+let recordsToken = 0
+
 async function loadRecords() {
+  const token = ++recordsToken
   try {
     const res = await aiApi.records({ page: toApiPage(page.value), size })
+    if (token !== recordsToken) return
     // 模板里直接读 records.records / records.total，接口一旦没按分页结构返回，
     // 渲染期就会抛 undefined.length 而整页白屏，所以这里只接受带 records 的结构。
     records.value = res?.records ? res : { records: [], total: 0 }
   } catch (e) {
+    if (token !== recordsToken) return
     records.value = { records: [], total: 0 }
     error.value = e.message
   }
@@ -104,6 +127,9 @@ onMounted(loadRecords)
 // 预览用的 objectURL 只在「换下一张图」时释放过，离开本页时最后那一份一直挂在
 // Blob 引用上不会被回收；反复进出识别页就会稳定泄漏。
 onBeforeUnmount(() => {
+  // 作废还在飞的请求，避免卸载后回包又写 state / 改动已销毁的 DOM
+  uploadToken++
+  recordsToken++
   if (preview.value) {
     URL.revokeObjectURL(preview.value)
     preview.value = ''

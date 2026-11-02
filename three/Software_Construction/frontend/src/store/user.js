@@ -11,7 +11,11 @@ const ROLE_NAMES = {
 export const useUserStore = defineStore('user', {
     state: () => ({
         profile: null,
-        loaded: false
+        loaded: false,
+        // 身份已确认过（含「确认是未登录」）。
+        // 只用 loaded 记录「拿到过 profile」时，匿名会话永远 loaded=false，
+        // 每次路由守卫与 landingPath 都会再发一次 /auth/me。
+        checked: false
     }),
 
     getters: {
@@ -30,24 +34,35 @@ export const useUserStore = defineStore('user', {
     actions: {
         // 刷新页面后先用会话向服务端确认身份，失败说明未登录
         async load() {
-            if (this.loaded) {
+            // checked：身份已确认过（含「确认是未登录」）。只用 loaded 时匿名访客
+            // 每导航一次、每次 landingPath 都会再发一次 /auth/me。
+            if (this.loaded || this.checked) {
                 return this.profile
             }
             try {
                 this.profile = await authApi.me()
+                this.loaded = true
             } catch (e) {
+                // 只有 401 是「确定未登录」，这个否定结果可以缓存（checked）；
+                // 网络抖动/后端 5xx 不能当成未登录，否则一次瞬断就把用户踢到登录页。
                 this.profile = null
+                this.loaded = false
+                this.checked = !!e && e.status === 401
             }
-            // 只有确认过身份才置位：否则一次网络抖动就会把 loaded 永久置为 true，
-            // 之后所有路由守卫都拿不到 profile，用户被卡在登录页只能刷新
-            this.loaded = this.profile !== null
             return this.profile
         },
 
         async login(form) {
-            this.profile = await authApi.login(form)
-            this.loaded = true
-            return this.profile
+            try {
+                this.profile = await authApi.login(form)
+                this.loaded = true
+                return this.profile
+            } catch (e) {
+                // 登录失败必须清掉旧快照：上一个账号的 profile 留在 state 里时，
+                // isLogin 仍为 true，接口却已是未登录，store 与真实会话不一致。
+                this.clear()
+                throw e
+            }
         },
 
         // 资料类接口直接回最新用户信息，用它同步 store。
@@ -71,6 +86,8 @@ export const useUserStore = defineStore('user', {
         clear() {
             this.profile = null
             this.loaded = false
+            // 到 clear 就意味着「确定未登录」（退出/401/登录失败），不必再发 /auth/me
+            this.checked = true
         }
     }
 })

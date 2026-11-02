@@ -54,7 +54,7 @@
                 <span v-if="row.waterTemp != null">水温 {{ row.waterTemp }}℃</span>
                 <span v-if="row.salinity != null"> · 盐度 {{ row.salinity }}‰</span>
                 <span v-if="row.depth != null"> · 水深 {{ row.depth }}m</span>
-                <span v-if="!row.waterTemp && !row.salinity && !row.depth">—</span>
+                <span v-if="row.waterTemp == null && row.salinity == null && row.depth == null">—</span>
               </td>
               <td v-if="store.canEdit">
                 <div class="table__actions">
@@ -126,14 +126,20 @@ onMounted(async () => {
   await load()
 })
 
+// 每次加载的序号：连续两次 search / 翻页时旧回包晚到会把旧筛选结果写回列表。
+let loadToken = 0
+
 async function load() {
+  const token = ++loadToken
   // 请求失败时不能停在「暂无数据」：那会把一次报错伪装成库里没有记录
   try {
     const data = await observationApi.list({ ...query, page: toApiPage(query.page) })
+    if (token !== loadToken) return
     rows.value = data?.records || []
     total.value = data?.total || 0
     loadError.value = ''
   } catch (e) {
+    if (token !== loadToken) return
     rows.value = []
     total.value = 0
     loadError.value = `加载失败：${e.message}`
@@ -183,6 +189,9 @@ async function remove(row) {
   }
   // 删掉的正是当前展开的那条时，必须一起收起，否则下方仍显示已删除记录的关联物种
   if (expanded.value?.observation?.id === row.id) expanded.value = null
+  // 删掉的是当前页最后一条且不在第一页时，原地重拉会得到空页（页码指向不存在的页），
+  // 用户看到「暂无数据」但其实上一页还有
+  if (rows.value.length === 1 && query.page > 1) query.page -= 1
   await load()
 }
 

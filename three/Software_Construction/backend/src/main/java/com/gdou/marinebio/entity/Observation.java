@@ -34,6 +34,7 @@ public class Observation extends BaseEntity {
     /** 所属生态系统。LAZY 避免列表查询时每行都去查一次生态系名 */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "ecosystem_id", nullable = false)
+    @ToString.Exclude
     private Ecosystem ecosystem;
 
     /**
@@ -70,5 +71,6 @@ public class Observation extends BaseEntity {
     private String weather;
 
     @Column(columnDefinition = "TEXT")
+    @ToString.Exclude
     private String notes;
 }

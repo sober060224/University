@@ -39,12 +39,14 @@ public class AiRecord extends BaseEntity {
     private AiType type;
 
     @Column(name = "input_text", length = 1000)
+    @ToString.Exclude
     private String inputText;
 
     @Column(name = "input_image", length = 255)
     private String inputImage;
 
     @Column(columnDefinition = "TEXT")
+    @ToString.Exclude
     private String result;
 
     /** 0~1，图像识别的置信度 */

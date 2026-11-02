@@ -21,8 +21,10 @@
             <!-- 必须带 key：SpeciesFormView / ObservationFormView 各同时挂在
                  /xxx/new 与 /xxx/:id/edit 两条路由上，Vue 默认会在两者之间复用同一个
                  组件实例，onMounted 不再触发，于是打开编辑链接后表单还是上一个页面的
-                 内容、isEdit 也停留在旧值，点保存会写成一条新记录。 -->
-            <router-view :key="route.fullPath"/>
+                 内容、isEdit 也停留在旧值，点保存会写成一条新记录。
+                 用 path 而不是 fullPath：query/hash 变化（以后的筛选条件写进地址栏）
+                 不应该把整个页面销毁重建、重发请求、丢掉滚动位置。 -->
+            <router-view :key="route.path"/>
         </main>
 
         <footer class="footer">
@@ -40,7 +42,23 @@ const route = useRoute()
 const router = useRouter()
 const store = useUserStore()
 
-const active = computed(() => route.meta.nav)
+// 子路由（species/new、species/:id/edit、admin/* 等）的 meta 只写了 title，
+// 直接取 route.meta.nav 会得到 undefined，从列表进表单后导航栏没有任何一项高亮。
+// 按路径前缀回退到最近的声明了 nav 的祖先路由。
+const active = computed(() => {
+    const matched = route.matched
+    for (let i = matched.length - 1; i >= 0; i--) {
+        if (matched[i].meta && matched[i].meta.nav) {
+            return matched[i].meta.nav
+        }
+    }
+    // species/new 与 species/:id 的 meta 没 nav，靠路径前缀归到物种菜单
+    const path = route.path
+    if (path.startsWith('/species')) return 'species'
+    if (path.startsWith('/observations')) return 'observations'
+    if (path.startsWith('/admin/users')) return null
+    return null
+})
 
 const menu = computed(() => {
     const items = [

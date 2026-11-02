@@ -20,10 +20,10 @@ const USECASE = {
   kind: 'usecase',
   boundary: { x: 340, y: 20, w: 940, h: 1220, label: '海洋生物多样性信息管理系统（模块四）' },
   nodes: [
-    { id: 'A_ADMIN', col: 0, row: 1, shape: 'actor', label: '系统管理员' },
-    { id: 'A_RES', col: 0, row: 5, shape: 'actor', label: '科研人员' },
-    { id: 'A_STU', col: 0, row: 8, shape: 'actor', label: '学生' },
-    { id: 'A_PUB', col: 0, row: 10, shape: 'actor', label: '公众' },
+    { id: 'A_GUEST', col: 0, row: 0, shape: 'actor', label: '游客' },
+    { id: 'A_USER', col: 0, row: 3, shape: 'actor', label: '用户' },
+    { id: 'A_AUDIT', col: 0, row: 6, shape: 'actor', label: '数据审核员' },
+    { id: 'A_ADMIN', col: 0, row: 9, shape: 'actor', label: '管理员' },
     { id: 'UC01', col: 3, row: 1, label: 'MBIS-VRM-1\n查看综合数据看板' },
     { id: 'UC02', col: 3, row: 3, label: 'MBIS-VRM-2\n查看统计分析图表' },
     { id: 'UC03', col: 5, row: 2, label: 'MBIS-VRM-3\n切换统计维度页签' },
@@ -36,11 +36,15 @@ const USECASE = {
     { id: 'UC10', col: 5, row: 8, label: '获取全量业务数据' },
   ],
   edges: [
-    { from: 'A_RES', to: 'UC01' }, { from: 'A_RES', to: 'UC02' }, { from: 'A_RES', to: 'UC04' },
-    { from: 'A_RES', to: 'UC05' }, { from: 'A_RES', to: 'UC06' }, { from: 'A_RES', to: 'UC07' },
-    { from: 'A_ADMIN', to: 'A_RES', style: 'general' },
-    { from: 'A_STU', to: 'UC01' }, { from: 'A_STU', to: 'UC02' }, { from: 'A_STU', to: 'UC04' },
-    { from: 'A_STU', to: 'UC05' }, { from: 'A_PUB', to: 'UC04' },
+    // 用户：可看看板与统计的两档共用一个参与者，「仅浏览公开物种」那一档见说明书表2-3 的分档
+    { from: 'A_USER', to: 'UC01' }, { from: 'A_USER', to: 'UC02' }, { from: 'A_USER', to: 'UC04' },
+    { from: 'A_USER', to: 'UC05' },
+    // 数据审核员只额外连报表出口，其余用例经泛化继承
+    { from: 'A_AUDIT', to: 'UC06' }, { from: 'A_AUDIT', to: 'UC07' },
+    // 管理员经泛化链 管理员 ⊳ 数据审核员 ⊳ 用户 继承全部，本模块内无独占用例
+    { from: 'A_ADMIN', to: 'A_AUDIT', style: 'general' },
+    { from: 'A_AUDIT', to: 'A_USER', style: 'general' },
+    // 游客不连任何用例：模块四的七个用例对其全部不可达
     { from: 'UC01', to: 'UC08', style: 'include' }, { from: 'UC02', to: 'UC08', style: 'include' },
     { from: 'UC03', to: 'UC02', style: 'extend' },
     { from: 'UC04', to: 'UC09', style: 'include' }, { from: 'UC05', to: 'UC09', style: 'include' },
@@ -65,7 +69,7 @@ const ACTS = [
     ['1', 8, 'a5', 'activity', '不予呈现'],
     ['1', 9, 'a6', 'activity', '呈现概览指标\n与分布图'],
     ['0', 10, 'e', 'end', ''],
-    ['-1', 4, 'n1', 'note', '公众角色无此入口，直接索取也被拒绝'],
+    ['-1', 4, 'n1', 'note', '游客与仅浏览公开物种的用户无此入口'],
   ], [
     ['s', 'a1'], ['a1', 'a2'], ['a2', 'd1'], ['d1', 'rj', '否'], ['d1', 'a3', '是'],
     ['rj', 'e'], ['a3', 'd2'], ['d2', 'a4', '是'], ['a4', 'a6'], ['d2', 'a5', '否'],

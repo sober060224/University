@@ -159,6 +159,7 @@ const blank = () => ({
 const form = reactive(blank())
 const saving = ref(false)
 const completing = ref(false)
+const uploading = ref(false)
 
 // 智能补全写回字段时用的中文名，弹窗里要给用户看中文而不是字段名
 const LABELS = {
@@ -217,18 +218,36 @@ async function autoComplete() {
 async function upload(e) {
   const file = e.target.files[0]
   if (!file) return
+  // 与 img 标签同口径：后端硬上限 5MB（multipart），前端不先拦就会白传 5MB 再吃一个 400
+  if (file.size > 5 * 1024 * 1024) {
+    alert('图片不能超过 5MB')
+    e.target.value = ''
+    return
+  }
+  // accept="image/*" 可被绕过：改名的非图片会白传一次再到后端被魔数校验报错
+  if (!/^image\/(jpeg|png|gif|webp)$/.test(file.type)) {
+    alert('只支持 JPG / PNG / GIF / WebP 图片')
+    e.target.value = ''
+    return
+  }
+  // 在飞锁：input 在上传期间仍可点，连选两次会并发跑两个 POST
+  if (uploading.value) return
+  uploading.value = true
   try {
     const res = await uploadApi.image(file)
     form.imageUrl = res.url
   } catch (e) {
-    alert(e.message)
+    alert(e?.message || '上传失败，请稍后重试')
   } finally {
+    uploading.value = false
     // 清空 input，连续上传同一张图片时才会再次触发 change
     e.target.value = ''
   }
 }
 
 async function submit() {
+  // 按钮的 :disabled 要等下一帧，双击会发出两次 POST（新增就是两条重复物种）
+  if (saving.value) return
   if (!form.chineseName.trim()) {
     alert('中文名不能为空')
     return

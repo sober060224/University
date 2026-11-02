@@ -4,7 +4,6 @@ import com.gdou.marinebio.entity.Role;
 import com.gdou.marinebio.entity.User;
 import com.gdou.marinebio.entity.UserStatus;
 import lombok.Getter;
-import org.springframework.security.core.Authentication;
 import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
@@ -76,41 +75,8 @@ public class LoginUser implements UserDetails {
         return status == UserStatus.ACTIVE;
     }
 
-    /** 从当前认证上下文取用户 id；未登录返回 null */
-    public static Integer idOf(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
-        }
-        Object principal = authentication.getPrincipal();
-        return principal instanceof LoginUser loginUser ? loginUser.getId() : null;
-    }
-
-    public static String usernameOf(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
-        }
-        Object principal = authentication.getPrincipal();
-        return principal instanceof LoginUser loginUser ? loginUser.getUsername() : null;
-    }
-
-    public static Role roleOf(Authentication authentication) {
-        if (authentication == null || !authentication.isAuthenticated()) {
-            return null;
-        }
-        Object principal = authentication.getPrincipal();
-        return principal instanceof LoginUser loginUser ? loginUser.getRole() : null;
-    }
-
-    // ===== 下面三个是给 @AuthenticationPrincipal LoginUser 场景用的重载 =====
-    // 允许匿名访问的接口拿到的 principal 是 null，直接取字段即可
-
-    public static Integer idOf(LoginUser user) {
-        return user == null ? null : user.getId();
-    }
-
-    public static String usernameOf(LoginUser user) {
-        return user == null ? null : user.getUsername();
-    }
+    // 未登录取字段的 null 安全入口只有下面这一个（@AuthenticationPrincipal LoginUser 场景，
+    // permitAll 接口拿到的 principal 是 null）；SpeciesController 4 个公开接口在用。
 
     public static Role roleOf(LoginUser user) {
         return user == null ? null : user.getRole();

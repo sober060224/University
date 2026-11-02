@@ -155,6 +155,8 @@ public class SecurityConfig {
                 // 观测智能标签与异常检测、智能问答（矩阵 √√√×）
                 .requestMatchers(HttpMethod.POST, "/api/ai/analyze", "/api/ai/ask")
                         .hasAnyRole(STATS_ROLES)
+                // /api/ai/history 的 GET 与 DELETE 都限 STATS_ROLES（问答矩阵 √√√×，
+                // 清空历史同权；AuthorizationMatrixTest 把 PUBLIC 拒、STUDENT 放钉死）。
                 .requestMatchers("/api/ai/history").hasAnyRole(STATS_ROLES)
                 // 其余 /api/ai/**（identify、translate、records）矩阵为 √√√√，落到下面的兜底规则
                 // 任何登录用户都能改自己的资料和密码，必须排在下面的管理员规则之前
@@ -185,7 +187,9 @@ public class SecurityConfig {
                 .logoutUrl("/api/auth/logout")
                 .logoutSuccessHandler((req, res, auth) -> writeJson(res, 200, true, "已退出登录", null))
                 .invalidateHttpSession(true)
-                .deleteCookies("JSESSIONID"))
+                // XSRF-TOKEN 也要一起删：它非 httpOnly 且不轮换，残留不会本身带来风险，
+                // 但「退出后浏览器里还留着上一个会话的令牌」在审查时是要多解释一句的事。
+                .deleteCookies("JSESSIONID", "XSRF-TOKEN"))
             // 认证失败与权限不足由过滤器链直接短路，不会走到 @RestControllerAdvice，
             // 所以这里必须自己拼出与业务接口一致的 Result 结构，前端才能读到提示语。
             .exceptionHandling(ex -> ex
@@ -231,6 +235,9 @@ public class SecurityConfig {
                                   String message, Object data) throws IOException {
         res.setStatus(status);
         res.setContentType("application/json;charset=UTF-8");
-        res.getWriter().write("{\"success\":" + success + ",\"message\":\"" + message + "\",\"data\":" + data + "}");
+        // 目前八个调用点传的全是代码里的常量，不会带引号；但这是个静态工具方法，
+        // 下一个接手的人很容易把用户输入接进来，这里先把双引号与反斜杠转掉。
+        String safe = message.replace("\\", "\\\\").replace("\"", "\\\"");
+        res.getWriter().write("{\"success\":" + success + ",\"message\":\"" + safe + "\",\"data\":" + data + "}");
     }
 }

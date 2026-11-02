@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * 模块一：用户注册与审核、用户信息维护、用户角色管理。
@@ -57,7 +58,18 @@ public class UserService {
     /** 管理员审核：激活并可同时授予科研人员身份，或驳回 */
     @Transactional
     public User approve(Integer id, AuthForms.Approve form, LoginUser operator) {
-        User user = require(id);
+        // 加锁顺序必须是「先管理员集合、后目标行」，与 assignRole 一致：
+        // 反过来（先锁目标行再锁集合）会在 approve 与 assignRole 并发时形成交叉等待，
+        // approve 持有目标行等集合、assignRole 持有集合等目标行，MySQL 只能回滚其中一个。
+        // 所以这里先无锁读一份，只用它判断目标是不是管理员。
+        User snapshot = require(id);
+        if (snapshot.getRole() == Role.ADMIN) {
+            userRepository.lockAllByRole(Role.ADMIN);
+        }
+        // 锁住这行：审核会改 status、role 和 credentialVersion 三个字段，
+        // 不加锁的话与另一个审核并发时各读各的旧快照、写回同一个版本号，
+        // 结果是「审核后旧会话立即失效」漏掉一次。
+        User user = userRepository.lockById(id).orElseThrow(() -> new BizException("用户不存在"));
         // 缺字段必须是「不通过」而不是「通过」：审核是放行账号进入系统的闸门，
         // 默认值给成 true 意味着一个残缺的请求体就能激活账号。
         boolean approved = Boolean.TRUE.equals(form.approved());
@@ -111,7 +123,7 @@ public class UserService {
     /** 用户维护自己的个人信息 */
     @Transactional
     public User updateProfile(Integer id, AuthForms.Profile form) {
-        User user = require(id);
+        User user = userRepository.lockById(id).orElseThrow(() -> new BizException("用户不存在"));
         if (form.realName() != null && !form.realName().isBlank()) {
             user.setRealName(form.realName());
         }
@@ -125,7 +137,10 @@ public class UserService {
 
     @Transactional
     public void changePassword(LoginUser loginUser, String oldPassword, String newPassword) {
-        User user = userRepository.findById(loginUser.getId())
+        // 和 resetPassword 一样锁住这行：改密要自增 credentialVersion（用来作废旧会话），
+        // 不加锁的话两个并发改密各读各的旧版本号 +1，会写回同一个值，
+        // 旧会话仍然有效——「改完密码旧会话立即失效」这件事就漏了一次。
+        User user = userRepository.lockById(loginUser.getId())
                 .orElseThrow(() -> new BizException("用户不存在"));
         if (!passwordEncoder.matches(oldPassword, user.getPassword())) {
             throw new BizException("原密码不正确");
@@ -138,7 +153,10 @@ public class UserService {
     /** 管理员重置他人密码 */
     @Transactional
     public void resetPassword(Integer id, String newPassword, LoginUser operator) {
-        User user = require(id);
+        // 锁住这行再改：改密要自增 credentialVersion（用来作废旧会话），
+        // 不加锁的话两个并发重置各读各的旧版本号 +1，会写回同一个值，
+        // 旧会话仍然有效——「重置密码让旧会话失效」这件事就漏了一次。
+        User user = userRepository.lockById(id).orElseThrow(() -> new BizException("用户不存在"));
         user.setPassword(passwordEncoder.encode(newPassword));
         user.setCredentialVersion(user.getCredentialVersion() + 1);
         userRepository.save(user);
@@ -147,7 +165,12 @@ public class UserService {
 
     @Transactional
     public User assignRole(Integer id, String role, LoginUser operator) {
-        User user = require(id);
+        // 与 approve 同样的加锁顺序：先管理员集合、后目标行（理由见上）。
+        User snapshot = require(id);
+        if (snapshot.getRole() == Role.ADMIN) {
+            userRepository.lockAllByRole(Role.ADMIN);
+        }
+        User user = userRepository.lockById(id).orElseThrow(() -> new BizException("用户不存在"));
         Role newRole = parseRole(role, user.getRole());
         // 只在「会让系统失去在岗管理员」时拦截；授予 ADMIN 不受限制，
         // 否则系统里只剩一名管理员时反而无法再增设第二名。

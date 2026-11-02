@@ -14,13 +14,16 @@ import com.gdou.marinebio.entity.Species;
 import com.gdou.marinebio.repository.AiRecordRepository;
 import com.gdou.marinebio.repository.ChatMessageRepository;
 import com.gdou.marinebio.entity.ChatMessage;
+import com.gdou.marinebio.entity.Observation;
 import com.gdou.marinebio.entity.Role;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -53,9 +56,15 @@ public class AiService {
      * utf8mb4 下一个汉字最多占 3~4 字节，按字符截到 16000 才能保证放得下。
      * 请求里没有 max_tokens，模型一旦放飞就远超这个量，而超长 INSERT 会被拒、
      * saveRecord 的 catch 只留一行 warn —— 又变成「调用成功但审计日志少一行」。
+     *
+     * <p>cut() 按字符数截断，这里改按字节数截：一个汉字在 utf8mb4 下最多 3 字节
+     * （MySQL 的 utf8mb4 是 3 字节/汉字，4 字节是 emoji），16000 字符最坏 48000 字节，
+     * 仍在 65535 之内。
      */
     private static final int RESULT_MAX = 16000;
 
+    /** 单个物种名的合理上限，与 dto/AuthForms.Analyze 里物种名的 @Size(max=150) 对齐。 */
+    private static final int NAME_MAX = 150;
     private static final String TAXONOMY_PROMPT = """
             你是一位海洋生物学领域的分类学专家。请根据用户给出的物种中文名或学名，补全该物种的分类信息。
             只输出一个 JSON 对象，不要输出任何解释文字，也不要使用 markdown 代码块包裹。字段如下：
@@ -99,7 +108,8 @@ public class AiService {
         long start = System.currentTimeMillis();
         String raw = callOrLog(user, AiType.IDENTIFY, null, form.imageUrl(), client.visionModel(), start,
                 () -> client.chatVision(IDENTIFY_PROMPT, form.imageUrl()));
-        JsonNode node = parseJson(raw);
+        JsonNode node = parseJsonLogged(raw, user, AiType.IDENTIFY, null, form.imageUrl(),
+                client.visionModel(), start);
         String chineseName = node.path("chineseName").asText("");
         // 提示词要求模型给 0~1 的小数，但模型并不总是照做：偶尔会直接写 85 表示 85%。
         // 原样存进 ai_records.confidence、原样发给前端，界面就会显示「8500%」，
@@ -143,7 +153,8 @@ public class AiService {
         long start = System.currentTimeMillis();
         String raw = callOrLog(user, AiType.COMPLETE, form.name(), null, client.textModel(), start,
                 () -> client.chatText(TAXONOMY_PROMPT, "物种名称：" + form.name()));
-        JsonNode node = parseJson(raw);
+        JsonNode node = parseJsonLogged(raw, user, AiType.COMPLETE, form.name(), null,
+                client.textModel(), start);
 
         Map<String, Object> result = new LinkedHashMap<>();
         for (String field : List.of("chineseName", "scientificName", "phylum", "className", "orderName",
@@ -180,7 +191,8 @@ public class AiService {
 
         String raw = callOrLog(user, AiType.TAG, context.toString(), null, client.textModel(), start,
                 () -> client.chatText(TAG_PROMPT, context.toString()));
-        JsonNode node = parseJson(raw);
+        JsonNode node = parseJsonLogged(raw, user, AiType.TAG, context.toString(), null,
+                client.textModel(), start);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("tags", toStringList(node.path("tags")));
@@ -214,13 +226,13 @@ public class AiService {
                 () -> client.chatText(QA_PROMPT, "用户检索到的系统数据：\n" + context + "\n\n问题：" + question));
 
         ChatMessage ask = new ChatMessage();
-        ask.setUserId(user.getId());
+        ask.setUserId(user == null ? null : user.getId());
         ask.setRole("user");
         ask.setContent(question);
         chatMessageRepository.save(ask);
 
         ChatMessage reply = new ChatMessage();
-        reply.setUserId(user.getId());
+        reply.setUserId(user == null ? null : user.getId());
         reply.setRole("assistant");
         reply.setContent(answer);
         chatMessageRepository.save(reply);
@@ -235,12 +247,24 @@ public class AiService {
     }
 
     public List<ChatMessage> history(Integer userId) {
-        return chatMessageRepository.findByUserIdOrderByIdAsc(userId);
+        // 仓储层按 id 倒序取最近 200 条，这里反成时间正序再回给前端：
+        // 直接写 Asc 的话 Top200 截到的是“最早”的 200 条，老用户永远看不到新消息。
+        List<ChatMessage> recent = chatMessageRepository.findTop200ByUserIdOrderByIdDesc(userId);
+        List<ChatMessage> ordered = new ArrayList<>(recent);
+        Collections.reverse(ordered);
+        return ordered;
     }
 
+    /**
+     * 清空对话历史。
+     *
+     * <p>派生删除会先 SELECT 出全部行再逐条 DELETE（N 条 SELECT + N 条 DELETE），
+     * 而这个表每提一次问就多 2 行、没有任何自动清理，长期用户可能有上千行。
+     * 仓储里改成一条批量 DELETE。
+     */
     @Transactional
     public void clearHistory(Integer userId) {
-        chatMessageRepository.deleteByUserId(userId);
+        chatMessageRepository.deleteAllByUserId(userId);
     }
 
     // ========== 能力五：物种描述多语言支持 ==========
@@ -295,7 +319,7 @@ public class AiService {
             // 关键识别结果可追溯，所以这里按列宽截断，保证这一行一定落库。
             record.setInputText(cut(inputText, 1000));
             record.setInputImage(cut(inputImage, 255));
-            record.setResult(cut(result, RESULT_MAX));
+            record.setResult(cutByBytes(result, RESULT_MAX));
             record.setConfidence(confidence);
             record.setTargetSpeciesId(targetSpeciesId);
             record.setModel(cut(model, 50));
@@ -314,6 +338,28 @@ public class AiService {
             return value;
         }
         return value.substring(0, max - 1) + "…";
+    }
+
+    /**
+     * 按 UTF-8 字节数截断：列宽是字节（TEXT 上限 65535 字节），而 cut() 截的是字符数。
+     * 一个汉字在 utf8mb4 下占 3 字节，按字符截到 16000 最坏就是 48000 字节——还在上限内，
+     * 所以这里不截也行；真正需要按字节收口的是那些「字符数看着不多、字节数却很大」的
+     * 情况（emoji 4 字节、组合字符），按字节收口才是列宽说了算。
+     */
+    private static String cutByBytes(String value, int maxBytes) {
+        if (value == null) {
+            return null;
+        }
+        byte[] bytes = value.getBytes(StandardCharsets.UTF_8);
+        if (bytes.length <= maxBytes) {
+            return value;
+        }
+        // 按字节截到合法字符边界：多字节字符被切一半会变成乱码
+        int end = maxBytes - 1;
+        while (end > 0 && (bytes[end] & 0xC0) == 0x80) {
+            end--;
+        }
+        return new String(bytes, 0, end, StandardCharsets.UTF_8) + "…";
     }
 
     // ========== 工具方法 ==========
@@ -457,20 +503,25 @@ public class AiService {
     /** 观测记录的三个检索入口共用这一段映射，避免同一份拼装逻辑抄三遍 */
     private List<Map<String, Object>> searchObservations(Long ecosystemId, Long speciesId,
                                                          String keyword, Role role) {
-        return observationService
+        List<Observation> found = observationService
                 .search(role, ecosystemId, null, speciesId, blankToNull(keyword), null, null,
                         PageResult.of(0, CONTEXT_LIMIT, 100, null))
-                .getRecords().stream().map(o -> {
-                    Map<String, Object> item = new LinkedHashMap<>();
-                    item.put("observeTime", o.getObserveTime());
-                    item.put("locationName", o.getLocationName());
-                    item.put("ecosystem", o.getEcosystem() == null ? "未指定" : o.getEcosystem().getName());
-                    // 原来这里写死「若干」，交给模型的是一个占位词，模型只好把它编成一个数字。
-                    // 计数走 listLinkedSpecies(role)：未公开物种对非特权角色会被遮蔽成占位条目，
-                    // 数的是过滤后可见的条数，不会反过来泄露看不到的记录数。
-                    item.put("speciesCount", observationService.listLinkedSpecies(o.getId(), role).size());
-                    return item;
-                }).toList();
+                .getRecords();
+        // 物种数一次分组查完：原来在 stream 里逐条调 listLinkedSpecies(id, role)，
+        // CONTEXT_LIMIT=8 就是 8 条额外的 findByObservationId（每条还 join fetch species），
+        // 每次智能问答固定多发 8 条 SQL。这里只数可见关联的条数，语义与
+        // listLinkedSpecies（未公开物种被遮蔽成占位条）等价。
+        Map<Integer, Long> counts = observationService.countLinkedSpecies(
+                found.stream().map(Observation::getId).toList(), role);
+        return found.stream().map(o -> {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("observeTime", o.getObserveTime());
+            item.put("locationName", o.getLocationName());
+            item.put("ecosystem", o.getEcosystem() == null ? "未指定" : o.getEcosystem().getName());
+            // 原来这里写死「若干」，交给模型的是一个占位词，模型只好把它编成一个数字。
+            item.put("speciesCount", counts.getOrDefault(o.getId(), 0L));
+            return item;
+        }).toList();
     }
 
     private static String blankToNull(String value) {
@@ -480,8 +531,18 @@ public class AiService {
     /** 优先用模型给的中文名，再用候选列表去回查本库。 */
     private List<String> namesToTry(String chineseName, JsonNode candidates) {
         List<String> names = new ArrayList<>();
-        names.add(chineseName);
-        candidates.forEach(node -> names.add(node.asText("")));
+        // 模型不总是只给一个名字：提示词要求「纯物种名」，但它有时会把一整段描述
+        // 写进 chineseName 字段。这个名字会直接进 matchByName 的 LIKE 查询，
+        // 2000 字的模式串既没用也会拖慢查询，所以超过单个名字上限就丢掉。
+        if (chineseName != null && !chineseName.isBlank() && chineseName.length() <= NAME_MAX) {
+            names.add(chineseName);
+        }
+        candidates.forEach(node -> {
+            String text = node.asText("");
+            if (!text.isBlank() && text.length() <= NAME_MAX) {
+                names.add(text);
+            }
+        });
         return names;
     }
 
@@ -493,6 +554,24 @@ public class AiService {
 
     private String nullToEmpty(Object value) {
         return value == null ? "" : String.valueOf(value);
+    }
+
+    /**
+     * 解析失败也要留痕。
+     *
+     * <p>callOrLog 只在 HTTP 调用抛异常时写失败行；拿到响应但解析不出 JSON 属于
+     * 「调到了但没用」，此时还没有任何 saveRecord，不补一条的话 ai_records 里
+     * 既没有失败行也没有可用结果——这次调用凭空消失，失败率统计永远偏低。
+     */
+    private JsonNode parseJsonLogged(String raw, LoginUser user, AiType type, String inputText,
+                                     String inputImage, String model, long start) {
+        try {
+            return parseJson(raw);
+        } catch (BizException e) {
+            saveRecord(user, type, inputText, inputImage, cutByBytes(raw, RESULT_MAX),
+                    null, null, model, System.currentTimeMillis() - start, false);
+            throw e;
+        }
     }
 
     /**
@@ -514,12 +593,18 @@ public class AiService {
         int start = text.indexOf('{');
         int end = text.lastIndexOf('}');
         if (start < 0 || end <= start) {
-            throw new BizException("大模型返回的内容不是有效 JSON：" + raw);
+            // 不能把 raw 拼进面向用户的提示：模型一次能返回几千字，它会整段显示在界面上，
+            // 既可能是上游错误页的 HTML，也可能把无关内容（甚至提示词里的内部上下文）带出去。
+            // 原文只进服务端日志（截断后），用户只看到一句可操作的提示。
+            log.warn("大模型返回的内容不是有效 JSON：{}", cutByBytes(raw, 500));
+            throw new BizException("大模型返回的内容不是有效 JSON，请稍后重试");
         }
         try {
             return MAPPER.readTree(text.substring(start, end + 1));
         } catch (Exception e) {
-            throw new BizException("解析大模型返回的 JSON 失败：" + e.getMessage());
+            // Jackson 的 message 里会带上出错位置的原文片段，不能直接给用户看
+            log.warn("解析大模型返回的 JSON 失败: {}", cutByBytes(raw, 500), e);
+            throw new BizException("大模型返回的内容解析失败，请稍后重试");
         }
     }
 }

@@ -9,3 +9,16 @@ dist/
 *.doc
 *.docx
 *.pdf
+*.drawio
+*.svg
+
+# 本目录只保留前后端代码，以及 README 与构建配置；
+# 实验文档、图表、工具、参考资料都不入库
+three/Software_Construction/*
+!three/Software_Construction/README.md
+!three/Software_Construction/backend/
+!three/Software_Construction/frontend/
+# 后端里的前端构建产物可由 frontend/ 重新生成，同样不入库
+three/Software_Construction/backend/src/main/resources/static/
+# 上传目录是运行时的用户数据，不是代码
+three/Software_Construction/backend/uploads/

@@ -39,6 +39,7 @@ public class ObservationSpecies extends BaseEntity {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "observation_id", nullable = false)
+    @ToString.Exclude
     private Observation observation;
 
     /** 关联项几乎总是要连带展示物种名与保护等级，因此一次性取出，避免脱离事务后再访问报懒加载异常 */
@@ -46,14 +47,18 @@ public class ObservationSpecies extends BaseEntity {
     @JoinColumn(name = "species_id", nullable = false)
     private Species species;
 
-    /** 估算数量 */
+    /** 估算数量。列名显式写死：不写的话靠命名策略把字段名原样映成 count，
+     *  换方言或换策略时会悄悄对不上 lab01/database.sql 的列。 */
+    @Column(name = "count")
     private Integer count;
 
     /** 观察到的行为，如「摄食」「繁殖」 */
     @Column(length = 255)
+    @ToString.Exclude
     private String behavior;
 
     @Column(length = 500)
+    @ToString.Exclude
     private String note;
 
     

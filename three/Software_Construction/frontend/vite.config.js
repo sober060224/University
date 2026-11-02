@@ -21,7 +21,12 @@ export default defineConfig({
         }
     },
     build: {
-        outDir: 'dist',
+        // 直接产出到后端托管的静态目录：后端拦 /uploads/** 之外的路径时会回退到
+        // classpath:/static/index.html，所以这份产物就是线上前端。原来默认输出
+        // dist/ 再手工拷，结果仓库里长期躺着一份旧产物（旧 UserManageView 分页
+        // 换算就是错的），而改源码根本不会让它更新。
+        outDir: '../backend/src/main/resources/static',
+        emptyOutDir: true,
         chunkSizeWarningLimit: 1500
     }
 })

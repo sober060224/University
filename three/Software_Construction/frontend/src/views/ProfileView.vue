@@ -10,6 +10,10 @@ const store = useUserStore()
 const router = useRouter()
 const notice = ref('')
 const error = ref('')
+// 保存/改密进行中：按钮 :disabled 只在下一帧生效，双击仍可能发出两次 PUT/POST，
+// 所以动作本身也要有在飞锁（语义同其它页面的 saving/submitting）
+const savingProfile = ref(false)
+const savingPwd = ref(false)
 // 改密成功后延时跳登录页的定时器句柄
 let redirectTimer = null
 
@@ -29,23 +33,47 @@ function fillProfile() {
 }
 
 async function saveProfile() {
+  if (savingProfile.value) return
+  // 与后端 UserForms 的 @Size 对齐：前端先挡，避免白跑一次请求
+  if (profile.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) {
+    error.value = '邮箱格式不正确'
+    return
+  }
+  if (profile.phone && !/^[0-9+\-\s]{6,20}$/.test(profile.phone)) {
+    error.value = '手机号格式不正确'
+    return
+  }
   error.value = ''
+  savingProfile.value = true
   try {
     // updateProfile 直接回最新用户信息，用它同步 store，避免界面回显旧值
     store.setProfile(await userApi.updateProfile(profile))
     fillProfile()
     notice.value = '个人资料已保存'
   } catch (e) {
-    error.value = e.message
+    error.value = e?.message || '保存失败，请稍后重试'
+  } finally {
+    savingProfile.value = false
   }
 }
 
 async function changePassword() {
-  error.value = ''
+  if (savingPwd.value) return
+  if (!pwd.oldPassword) {
+    error.value = '请输入原密码'
+    return
+  }
+  // 与后端 ChangePassword @Size(min=6) 对齐；原先只在占位符里写了「至少 6 位」
+  if (pwd.newPassword.length < 6) {
+    error.value = '新密码至少 6 位'
+    return
+  }
   if (pwd.newPassword !== pwd.confirm) {
     error.value = '两次输入的新密码不一致'
     return
   }
+  error.value = ''
+  savingPwd.value = true
   try {
     await userApi.changePassword({ oldPassword: pwd.oldPassword, newPassword: pwd.newPassword })
     pwd.oldPassword = ''
@@ -58,7 +86,9 @@ async function changePassword() {
     // 还是会被强行拽回登录页
     redirectTimer = setTimeout(() => router.push('/login'), 800)
   } catch (e) {
-    error.value = e.message
+    error.value = e?.message || '修改失败，请稍后重试'
+  } finally {
+    savingPwd.value = false
   }
 }
 
@@ -124,7 +154,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="btn-group" style="margin-top: 12px">
-          <button class="btn" @click="saveProfile">保存资料</button>
+          <button class="btn" :disabled="savingProfile" @click="saveProfile">{{ savingProfile ? '保存中…' : '保存资料' }}</button>
         </div>
       </div>
 
@@ -145,7 +175,7 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="btn-group" style="margin-top: 12px">
-          <button class="btn" @click="changePassword">提交修改</button>
+          <button class="btn" :disabled="savingPwd" @click="changePassword">{{ savingPwd ? '提交中…' : '提交修改' }}</button>
         </div>
       </div>
     </div>

@@ -81,28 +81,37 @@ function renderObservations(points) {
           <strong>${escapeHtml(p.locationName || '未命名观测点')}</strong>
           <em>${escapeHtml(eco)}</em>
           <span>观测时间：${escapeHtml(formatTime(p.observeTime))}</span>
-          <span>发现物种：${p.speciesCount} 种</span>
-          <span>坐标：${p.longitude}, ${p.latitude}</span>
+          <span>发现物种：${escapeHtml(String(p.speciesCount ?? ''))} 种</span>
+          <span>坐标：${escapeHtml(String(p.longitude ?? ''))}, ${escapeHtml(String(p.latitude ?? ''))}</span>
         </div>`).addTo(layer)
   })
 }
 
+// 每次加载的序号：切 tab 很快时，旧请求的回包晚到，会把它的标记塞进新 tab 的图层里，
+// 于是「物种分布」图上混着观测点。回包回来时序号已变就直接丢弃。
+let loadToken = 0
+
 async function load() {
+  const token = ++loadToken
   loading.value = true
   try {
-    // 切换图层时先清空旧数据，避免两种标记混在一张图里
     if (layer) layer.remove()
     layer = L.layerGroup().addTo(map)
 
     if (mode.value === 'observations' && showObservationTab.value) {
-      renderObservations(await observationApi.map())
+      const points = await observationApi.map()
+      if (token !== loadToken) return
+      renderObservations(points)
     } else {
-      renderSpecies(await speciesApi.map())
+      const points = await speciesApi.map()
+      if (token !== loadToken) return
+      renderSpecies(points)
     }
   } catch (e) {
-    alert(e.message)
+    if (token === loadToken) alert(e.message)
   } finally {
-    loading.value = false
+    // 只有最后一次请求才关 loading，否则旧请求结束会提前把新请求的转圈关掉
+    if (token === loadToken) loading.value = false
   }
 }
 
@@ -117,6 +126,8 @@ onMounted(() => {
 
 watch(mode, load)
 onBeforeUnmount(() => {
+  // 作废还在飞的请求：否则它回来时会往已销毁的图层里 addTo，抛错或泄露
+  loadToken++
   if (map) {
     map.remove()
     map = null

@@ -10,6 +10,9 @@ import { fetchAllPages, formatTime, toApiPage } from '../utils/index'
 
 const store = useUserStore()
 const notice = ref('')
+// 三个弹窗确认动作共用一个在飞锁：按钮 :disabled 要等下一帧，双击会发出两次
+// approve/assignRole/resetPassword
+const submitting = ref(false)
 const error = ref('')
 
 const STATUS_NAMES = { PENDING: '待审核', ACTIVE: '正常', REJECTED: '已拒绝' }
@@ -29,19 +32,27 @@ const resetValue = ref('')
 
 const isAdmin = computed(() => store.isAdmin)
 
+// 连续点搜索/翻页/审核后刷新时，旧回包晚到会把旧列表和旧概览盖回去
+let loadToken = 0
+
 async function load() {
+  const token = ++loadToken
   error.value = ''
   try {
     if (isAdmin.value) {
-      list.value = await userApi.list({ ...filters, page: toApiPage(page.value), size })
-      overview.value = await userApi.overview()
+      const nextList = await userApi.list({ ...filters, page: toApiPage(page.value), size })
+      const nextOverview = await userApi.overview()
       // 待审核卡片原来固定取第一页的 50 条：申请一旦超过 50 条，多出来的部分在界面上
       // 既看不见也审不了，而卡片标题的 ({{ pending.length }}) 会一直显示 50，
       // 和旁边「待审核」概览卡里的真实数字自相矛盾。这里按 total 分页取全量。
-      pending.value = await fetchAllPages(userApi.list, { status: 'PENDING' })
+      const nextPending = await fetchAllPages(userApi.list, { status: 'PENDING' })
+      if (token !== loadToken) return
+      list.value = nextList
+      overview.value = nextOverview
+      pending.value = nextPending
     }
   } catch (e) {
-    error.value = e.message
+    if (token === loadToken) error.value = e.message
   }
 }
 
@@ -81,8 +92,10 @@ function openApprove(user) {
 }
 
 async function confirmApprove() {
+  if (submitting.value) return
   const target = approveTarget.value
   error.value = ''
+  submitting.value = true
   try {
     await userApi.approve(target.id, { approved: true, role: target.role })
     notice.value = `已通过 ${target.username} 的注册申请，身份：${ROLE_NAMES[target.role]}`
@@ -91,7 +104,9 @@ async function confirmApprove() {
   } catch (e) {
     // 「系统至少需要保留一名在岗管理员」这类拒绝要留在页面上：
     // 审核这一步现在能授予任意角色，后端那条保命判据同样会拦在这里。
-    error.value = e.message
+    error.value = e?.message || '操作失败，请稍后重试'
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -100,14 +115,18 @@ function startEdit(user) {
 }
 
 async function saveRole() {
+  if (submitting.value) return
   error.value = ''
+  submitting.value = true
   try {
     await userApi.assignRole(editing.value.id, { role: editing.value.role })
     notice.value = `已将 ${editing.value.username} 的角色改为${ROLE_NAMES[editing.value.role]}`
     editing.value = null
     load()
   } catch (e) {
-    error.value = e.message
+    error.value = e?.message || '操作失败，请稍后重试'
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -117,13 +136,22 @@ function startReset(user) {
 }
 
 async function doReset() {
+  if (submitting.value) return
+  // 与后端 ResetPassword @Size(6,100) 对齐；原先空白/过短也会发出去
+  if (!resetValue.value || resetValue.value.length < 6) {
+    error.value = '新密码至少 6 位'
+    return
+  }
   error.value = ''
+  submitting.value = true
   try {
     await userApi.resetPassword(resetTarget.value.id, { newPassword: resetValue.value })
     notice.value = `已重置 ${resetTarget.value.username} 的密码`
     resetTarget.value = null
   } catch (e) {
-    error.value = e.message
+    error.value = e?.message || '操作失败，请稍后重试'
+  } finally {
+    submitting.value = false
   }
 }
 
@@ -265,7 +293,7 @@ onMounted(async () => {
           系统会保证至少保留一名在岗管理员。
         </p>
         <div class="btn-group" style="margin-top: 14px">
-          <button class="btn" @click="confirmApprove">确认通过</button>
+          <button class="btn" :disabled="submitting" @click="confirmApprove">{{ submitting ? '处理中…' : '确认通过' }}</button>
           <button class="btn btn--ghost" @click="approveTarget = null">取消</button>
         </div>
       </div>
@@ -283,7 +311,7 @@ onMounted(async () => {
         </div>
         <p class="form-item__hint">科研人员与管理员只能由管理员授予；系统会保证至少保留一名管理员。</p>
         <div class="btn-group" style="margin-top: 14px">
-          <button class="btn" @click="saveRole">保存</button>
+          <button class="btn" :disabled="submitting" @click="saveRole">{{ submitting ? '保存中…' : '保存' }}</button>
           <button class="btn btn--ghost" @click="editing = null">取消</button>
         </div>
       </div>
@@ -298,7 +326,7 @@ onMounted(async () => {
           <input v-model="resetValue" class="input" type="password" placeholder="至少 6 位">
         </div>
         <div class="btn-group" style="margin-top: 14px">
-          <button class="btn" @click="doReset">确认重置</button>
+          <button class="btn" :disabled="submitting" @click="doReset">{{ submitting ? '重置中…' : '确认重置' }}</button>
           <button class="btn btn--ghost" @click="resetTarget = null">取消</button>
         </div>
       </div>

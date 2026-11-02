@@ -8,7 +8,9 @@
       <div class="page__actions">
         <button class="btn btn--ghost" @click="$router.back()">返回列表</button>
         <!-- 翻译对所有登录角色开放（矩阵 表 3-2 公众也是 √），不能跟着「编辑」一起收进 canEdit -->
-        <button v-if="store.isLogin" class="btn" @click="translate">多语言描述</button>
+        <button v-if="store.isLogin" class="btn" :disabled="translating" @click="translate">
+          {{ translating ? '翻译中…' : '多语言描述' }}
+        </button>
         <button v-if="store.canEdit" class="btn" @click="$router.push(`/species/${item.id}/edit`)">编辑</button>
       </div>
     </div>
@@ -85,8 +87,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { speciesApi, observationApi, aiApi } from '../api'
 import { useUserStore } from '../store/user'
 import { formatTime, safeExternalUrl } from '../utils'
@@ -116,6 +118,14 @@ const endangerClass = computed(() => {
 })
 
 onMounted(async () => {
+  await loadDetail()
+})
+
+// 切到同路由的另一个 id 时组件不重挂载，onMounted 不会再触发，
+// 详情页会停在上一个物种（用户以为没点进去）。监听参数变化重拉。
+watch(() => route.params.id, () => loadDetail())
+
+async function loadDetail() {
   // 失败时不能停在「加载中…」：item 为空时 v-if="!item.id" 永远成立，
   // 页面会一直转圈且没有任何出错提示，所以把失败原因存进 error 由模板显示。
   try {
@@ -135,10 +145,13 @@ onMounted(async () => {
     // 会把已经取到的物种详情全部抹掉。计数有自己的状态位。
     countError.value = e.message
   }
-})
+}
 
 // 模块五：物种描述多语言支持
+// 在飞锁：按钮只在下一帧才 :disabled，连点会并发开出多次大模型调用（每次都是钱）
+const translating = ref(false)
 async function translate() {
+  if (translating.value) return
   const text = [item.value.chineseName, item.value.morphology, item.value.habits]
     .filter(Boolean)
     .join('。')
@@ -146,11 +159,14 @@ async function translate() {
     alert('该物种还没有可用于翻译的描述内容')
     return
   }
+  translating.value = true
   try {
     const res = await aiApi.translate({ text, targetLanguage: translateLang.value })
     translated.value = res?.text || ''
   } catch (e) {
-    alert(e.message)
+    alert(e?.message || '翻译失败，请稍后重试')
+  } finally {
+    translating.value = false
   }
 }
 </script>

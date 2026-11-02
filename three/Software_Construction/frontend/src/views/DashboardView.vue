@@ -68,7 +68,7 @@
                     <ChartBox :option="monthlyOption"/>
                 </div>
                 <div v-if="data.observerStats" class="card">
-                    <h2 class="card__title">观测人员活跃度</h2>
+                    <h2 class="card__title">观测人员活跃度（观测次数 Top 10）</h2>
                     <ChartBox :option="observerOption"/>
                 </div>
                 <div class="card">
@@ -97,14 +97,21 @@ const PALETTE = ['#0a6e96', '#0e9c9c', '#3aa6a0', '#6fb1c4', '#f0a04b', '#e2703a
 
 onMounted(load)
 
+// 看板只有一个刷新入口，但 onMounted 与「刷新」按钮能触发重叠请求：
+// 旧回包晚到会盖掉新数据，且旧请求的 finally 会提前把 loading 关掉。
+let loadToken = 0
+
 async function load() {
+    const token = ++loadToken
     loading.value = true
     try {
-        data.value = await statsApi.dashboard()
+        const next = await statsApi.dashboard()
+        if (token !== loadToken) return
+        data.value = next
     } catch (e) {
-        alert(e.message)
+        if (token === loadToken) alert(e.message || '加载失败，请稍后重试')
     } finally {
-        loading.value = false
+        if (token === loadToken) loading.value = false
     }
 }
 

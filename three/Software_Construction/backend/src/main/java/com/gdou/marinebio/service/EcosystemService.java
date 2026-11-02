@@ -6,6 +6,7 @@ import com.gdou.marinebio.dto.SpeciesForms;
 import com.gdou.marinebio.entity.Ecosystem;
 import com.gdou.marinebio.repository.EcosystemRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,12 +36,9 @@ public class EcosystemService {
         if (question == null || question.isBlank()) {
             return null;
         }
-        // 取够候选之后在 Java 侧按名字长度倒序，让更具体的名字胜出
-        // （「红树林」与「红树林湿地」同时命中时该用后者）。
-        return ecosystemRepository.findMentionedIn(question.trim(),
-                        org.springframework.data.domain.Pageable.ofSize(10)).stream()
-                .max(java.util.Comparator.comparingInt(e -> e.getName() == null ? 0 : e.getName().length()))
-                .orElse(null);
+        // 已经按名字长度倒序，取第一条就是最长的那个。
+        return ecosystemRepository.findMentionedIn(question.trim(), Pageable.ofSize(1))
+                .stream().findFirst().orElse(null);
     }
 
     @Transactional

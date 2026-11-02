@@ -66,6 +66,9 @@ class AdminGuardTest {
 
     private void givenTarget(User target, User... otherAdmins) {
         when(userRepository.findById(target.getId())).thenReturn(Optional.of(target));
+        // 审核与改角色现在都先锁行再改：测试里没有真数据库，行锁就是这一个方法，
+        // 不 stub 它的话 lockById 返回空 Optional，逻辑会走到「用户不存在」。
+        lenient().when(userRepository.lockById(target.getId())).thenReturn(Optional.of(target));
         // lenient：审核结果如果让目标本人继续保有 ACTIVE 的 ADMIN 身份，
         // 判据会直接短路返回，根本不会去查管理员集合——这正是要验证的行为之一。
         lenient().when(userRepository.lockAllByRole(Role.ADMIN))
@@ -134,6 +137,7 @@ class AdminGuardTest {
     void promotingToAdminIsAlwaysAllowed() {
         User researcher = account(4, "researcher", Role.RESEARCHER, UserStatus.ACTIVE);
         when(userRepository.findById(4)).thenReturn(Optional.of(researcher));
+        when(userRepository.lockById(4)).thenReturn(Optional.of(researcher));
         when(userRepository.save(any(User.class))).thenAnswer(c -> c.getArgument(0));
 
         assertThatCode(() -> userService.assignRole(4, "ADMIN", ADMIN_OPERATOR)).doesNotThrowAnyException();
@@ -155,6 +159,7 @@ class AdminGuardTest {
     void missingApprovedFlagFailsClosed() {
         User applicant = account(7, "pending", Role.STUDENT, UserStatus.PENDING);
         when(userRepository.findById(7)).thenReturn(Optional.of(applicant));
+        when(userRepository.lockById(7)).thenReturn(Optional.of(applicant));
         when(userRepository.save(any(User.class))).thenAnswer(c -> c.getArgument(0));
 
         User result = userService.approve(7, new AuthForms.Approve(null, null), ADMIN_OPERATOR);
@@ -209,6 +214,7 @@ class AdminGuardTest {
     void approveWritesAuditLog() {
         User applicant = account(8, "newbie", Role.STUDENT, UserStatus.PENDING);
         when(userRepository.findById(8)).thenReturn(Optional.of(applicant));
+        when(userRepository.lockById(8)).thenReturn(Optional.of(applicant));
         when(userRepository.save(any(User.class))).thenAnswer(c -> c.getArgument(0));
 
         userService.approve(8, new AuthForms.Approve(true, "RESEARCHER"), ADMIN_OPERATOR);

@@ -98,11 +98,21 @@ public class StatsService {
         }).toList();
     }
 
-    /** 把 nativeQuery 返回的 [label, count] 二元组转成 ECharts 直接可用的 {name, value}。 */
+    /**
+     * 把 nativeQuery 返回的 [label, count] 二元组转成 ECharts 直接可用的 {name, value}。
+     *
+     * <p>null 与空串归成同一个「未填写」：物种表单允许把保护等级/濒危度清空，
+     * 这类行的列值是 ''，而登记时就留空的列是 null。原来 null 被写成「未填写」、
+     * 空串原样成 name:""，同一件事在饼图上渲染成两根柱（一根有名字、一根无标签），
+     * 占比也被拆成两半。countGroupByPhylum 在 SQL 里滤掉了空值所以没这个问题，
+     * 另外两条分组查询没有，故在这里统一收口。
+     */
     private List<Map<String, Object>> toPairs(List<Object[]> rows) {
         return rows.stream().map(row -> {
+            Object label = row[0];
+            boolean blank = label == null || String.valueOf(label).isBlank();
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("name", String.valueOf(row[0]));
+            item.put("name", blank ? "未填写" : String.valueOf(label));
             item.put("value", row[1]);
             return item;
         }).toList();

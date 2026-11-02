@@ -3,7 +3,6 @@ package com.gdou.marinebio.dto;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.DecimalMax;
 import jakarta.validation.constraints.DecimalMin;
-import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
@@ -40,12 +39,12 @@ public final class SpeciesForms {
             @NotBlank(message = "中文名不能为空")
             @Size(max = 100, message = "中文名长度不能超过 100 个字符") String chineseName,
             @Size(max = 150, message = "学名长度不能超过 150 个字符") String scientificName,
-            @Size(max = 30, message = "门长度不能超过 30 个字符") String phylum,
-            @Size(max = 30, message = "纲长度不能超过 30 个字符") String className,
-            @Size(max = 30, message = "目长度不能超过 30 个字符") String orderName,
-            @Size(max = 30, message = "科长度不能超过 30 个字符") String familyName,
-            @Size(max = 30, message = "属长度不能超过 30 个字符") String genusName,
-            @Size(max = 30, message = "种长度不能超过 30 个字符") String speciesName,
+            @Size(max = 50, message = "门长度不能超过 50 个字符") String phylum,
+            @Size(max = 50, message = "纲长度不能超过 50 个字符") String className,
+            @Size(max = 50, message = "目长度不能超过 50 个字符") String orderName,
+            @Size(max = 50, message = "科长度不能超过 50 个字符") String familyName,
+            @Size(max = 50, message = "属长度不能超过 50 个字符") String genusName,
+            @Size(max = 50, message = "种长度不能超过 50 个字符") String speciesName,
             @Size(max = 2000, message = "形态特征不能超过 2000 个字符") String morphology,
             @Size(max = 2000, message = "生活习性不能超过 2000 个字符") String habits,
             @Size(max = 255, message = "分布区域长度不能超过 255 个字符") String distribution,
@@ -75,7 +74,8 @@ public final class SpeciesForms {
     /** 观测记录，species 是一次观测中看到的所有物种 */
     public record Observation(
             @NotNull(message = "请选择观测所属的生态系统") Integer ecosystemId,
-            @NotNull(message = "请填写观测时间") java.time.LocalDateTime observeTime,
+            @NotNull(message = "请填写观测时间")
+            java.time.LocalDateTime observeTime,
             @DecimalMin(value = "-180.0", message = "经度需在 -180 到 180 之间")
             @DecimalMax(value = "180.0", message = "经度需在 -180 到 180 之间") Double longitude,
             @DecimalMin(value = "-90.0", message = "纬度需在 -90 到 90 之间")

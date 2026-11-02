@@ -183,16 +183,22 @@ function onPage(target) {
     load()
 }
 
+// 每次加载的序号：快速翻页/改筛选时旧回包会晚到，把上一页的 10 条写成当前页的内容。
+// 回包回来时序号已变就丢弃，loading 也只由最后一次请求关闭。
+let loadToken = 0
+
 async function load() {
+    const token = ++loadToken
     loading.value = true
     try {
         const result = await speciesApi.list({ ...query, page: toApiPage(page.value), size })
+        if (token !== loadToken) return
         rows.value = result.records
         total.value = result.total
     } catch (e) {
-        alert(e.message)
+        if (token === loadToken) alert(e.message)
     } finally {
-        loading.value = false
+        if (token === loadToken) loading.value = false
     }
 }
 

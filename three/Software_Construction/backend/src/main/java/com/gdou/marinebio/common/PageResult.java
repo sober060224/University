@@ -36,10 +36,6 @@ public class PageResult<T> {
         return new PageResult<>(p.getContent(), p.getTotalElements(), p.getNumber(), p.getSize());
     }
 
-    public static <T, R> PageResult<R> of(Page<T> p, List<R> records) {
-        return new PageResult<>(records, p.getTotalElements(), p.getNumber(), p.getSize());
-    }
-
     /**
      * 各列表接口统一从这里取分页参数。
      * page / size 来自查询串，不能直接丢给 PageRequest.of：它对 page &lt; 0
@@ -48,7 +44,11 @@ public class PageResult<T> {
      */
     public static Pageable of(int page, int size, int maxSize, Sort sort) {
         int safePage = Math.max(page, 0);
-        int safeSize = Math.min(Math.max(size, 1), maxSize);
+        // maxSize 也要夹一下：传进来的上限若是 0 或负数，min() 会把 size 压成 0，
+        // 而 PageRequest.of(page, 0) 直接抛 IllegalArgumentException ——
+        // 上限是服务端定的常量，不该让它变成一次 500。
+        int safeMax = Math.max(maxSize, 1);
+        int safeSize = Math.min(Math.max(size, 1), safeMax);
         return sort == null ? PageRequest.of(safePage, safeSize) : PageRequest.of(safePage, safeSize, sort);
     }
 }

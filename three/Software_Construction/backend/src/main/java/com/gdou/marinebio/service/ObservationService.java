@@ -60,6 +60,12 @@ public class ObservationService {
         if (speciesId != null && !canSeeSpecies(role, speciesId)) {
             return PageResult.of(new org.springframework.data.domain.PageImpl<>(List.of(), pageable, 0));
         }
+        // from > to 不是「没有数据」而是参数填反了：不拦的话查询无条件返回空页，
+        // 用户看到「暂无观测记录」会去怀疑数据没了，而实际是他把两个日期框调了个个儿。
+        // 等于同一天是合法的（表示当天一整天），只在严格大于时才报错。
+        if (from != null && to != null && from.isAfter(to)) {
+            throw new BizException("开始时间不能晚于结束时间");
+        }
         return PageResult.of(observationRepository.search(ecosystemId, observerId, speciesId,
                 blankToNull(keyword), from, to, pageable));
     }
@@ -69,17 +75,44 @@ public class ObservationService {
         if (role == Role.ADMIN || role == Role.RESEARCHER) {
             return true;
         }
+        // 不能写成 speciesId.intValue()：Long 转 int 是截断而不是溢出检查，
+        // 4294967297 会被截成 1，于是「查有没有 4294967297 这个未公开物种」
+        // 变成了「查 1 号物种是不是公开的」。这条路径目前 fail-closed（最多把
+        // 结果错误地清空），但一个越界的入参能改变落到的行，本身就是隐患。
+        if (speciesId < Integer.MIN_VALUE || speciesId > Integer.MAX_VALUE) {
+            return false;
+        }
         return speciesRepository.findById(speciesId.intValue())
                 .filter(s -> Boolean.TRUE.equals(s.getIsPublic()))
                 .isPresent();
     }
 
-    /** 详情：带上所属生态系统与本次观测到的全部物种 */
+    /** 详情：带上所属生态系统与本次观测到的全部物种。
+     *
+     * <p>「notes」是科研人员的自由文本，可能写出物种名、地点、时间等足以
+     * 反推「这是什么物种」的内容；未公开物种的观测必须连 notes 一并遮蔽，
+     * 否则 detail 就是一条完整的可见性泄露链（listLinkedSpecies 已遮蔽物种列表，
+     * 但 notes 漏了）。管理员与科研人员看全部，其余角色只看已公开物种的观测，
+     * 其 notes 置 null。
+     */
     public Map<String, Object> detail(Integer id, Role role) {
         Observation observation = observationRepository.findWithEcosystemById(id)
                 .orElseThrow(() -> new BizException("观测记录不存在"));
+        boolean seeAll = role == Role.ADMIN || role == Role.RESEARCHER;
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("observation", observation);
+        Map<String, Object> obs = new LinkedHashMap<>();
+        obs.put("id", observation.getId());
+        obs.put("ecosystemId", observation.getEcosystem() == null ? null : observation.getEcosystem().getId());
+        obs.put("observeTime", observation.getObserveTime());
+        obs.put("longitude", observation.getLongitude());
+        obs.put("latitude", observation.getLatitude());
+        obs.put("locationName", observation.getLocationName());
+        obs.put("waterTemp", observation.getWaterTemp());
+        obs.put("salinity", observation.getSalinity());
+        obs.put("depth", observation.getDepth());
+        obs.put("weather", observation.getWeather());
+        obs.put("notes", seeAll ? observation.getNotes() : null);
+        data.put("observation", obs);
         data.put("species", listLinkedSpecies(id, role));
         return data;
     }
@@ -140,7 +173,12 @@ public class ObservationService {
             // ②更要命的是 speciesId 被直接交到无权角色手里，而 /api/observations?speciesId= 曾是
             //   一条不做可见性校验的通路——两个缺陷拼起来就是一条完整的泄露链。
             // 行数保留（否则「本次观测到 N 个物种」的计数会反过来泄露隐藏条数），只把内容清空。
-            item.put("speciesId", visible ? species.getId() : null);
+            // speciesId 不能置 null：SpeciesLink.speciesId 带 @NotNull，编辑页把 detail 的
+            // 物种清单原样回填成表单再提交，null 会被嵌套校验拦下，报的是「请选择物种」——
+            // 而列表里明明每行都选好了物种，用户无从下手。置成 -1 而不是真 id：
+            // 既不把隐藏物种的 id 交给无权角色，又能在 saveLinks 里被当成不可见物种拦下
+            // （那里按 visible 映射查，查不到就抛业务异常），不会真被写进 observation_species。
+            item.put("speciesId", visible ? species.getId() : -1);
             item.put("chineseName", visible ? species.getChineseName() : "未公开物种");
             item.put("scientificName", visible ? species.getScientificName() : null);
             item.put("imageUrl", visible ? species.getImageUrl() : null);
@@ -152,12 +190,41 @@ public class ObservationService {
         }).toList();
     }
 
+    /**
+     * 批量数一批观测各自的「可见关联物种数」。
+     *
+     * <p>智能问答要用这个数填上下文；逐条调 listLinkedSpecies 会退化成 N+1：
+     * 8 条记录就是 8 条 join fetch 查询。未公开物种对非特权角色不计入，
+     * 与 listLinkedSpecies 把隐藏物种遮蔽成占位条的口径一致。
+     */
+    public Map<Integer, Long> countLinkedSpecies(List<Integer> observationIds, Role role) {
+        if (observationIds == null || observationIds.isEmpty()) {
+            return Map.of();
+        }
+        boolean seeAll = role == Role.ADMIN || role == Role.RESEARCHER;
+        Map<Integer, Long> counts = new HashMap<>();
+        for (Object[] row : observationSpeciesRepository.countGroupByObservations(observationIds, seeAll)) {
+            counts.put(((Number) row[0]).intValue(), ((Number) row[1]).longValue());
+        }
+        return counts;
+    }
+
     // ---------------- 模块四：观测地点地图与观测活动统计 ----------------
 
-    /** 观测地点地图，点位上带一份概要信息供点击查看 */
-    public List<Map<String, Object>> mapPoints() {
+    /**
+     * 观测地点地图，点位上带一份概要信息供点击查看。
+     *
+     * <p>speciesCount 必须按角色过滤。它原本来自 countGroupByObservation()，
+     * 那个分组查询在 SQL 里数的是 observation_species 的全部关联行，不看 is_public；
+     * 而 /api/observations/map 对已登录的任何角色开放（含 PUBLIC），于是
+     * 「某点关联了 3 个物种、其中 2 个是未公开物种」会原样下发，
+     * 与 listLinkedSpecies 的遮蔽、EcosystemRepository.statsWithCounts 的 publicFilter
+     * 是同一条泄露链上的第三个洞：地图上点一下就能反推出藏着几个物种。
+     */
+    public List<Map<String, Object>> mapPoints(Role role) {
+        boolean seeAll = role == Role.ADMIN || role == Role.RESEARCHER;
         Map<Integer, Long> speciesCount = new HashMap<>();
-        for (Object[] row : observationSpeciesRepository.countGroupByObservation()) {
+        for (Object[] row : observationSpeciesRepository.countGroupByObservation(seeAll)) {
             speciesCount.put(((Number) row[0]).intValue(), ((Number) row[1]).longValue());
         }
         return observationRepository.findAllWithEcosystem().stream()
@@ -214,7 +281,17 @@ public class ObservationService {
         if (isCreate || form.ecosystemId() != null) {
             target.setEcosystem(ecosystemService.get(form.ecosystemId()));
         }
-        if (isCreate || form.observeTime() != null) target.setObserveTime(form.observeTime());
+        if (isCreate || form.observeTime() != null) {
+            // @DecimalMin 不支持 LocalDateTime，只能在服务层卡边界。observe_time 是
+            // MySQL DATETIME：只接受 1000-01-01 ~ 9999-12-31，而 LocalDateTime 能表示的
+            // 范围比它大得多。不拦的话 0001-01-01 能过校验，直到底层驱动才报错，
+            // 用户看到的是「服务器内部错误」而不是「时间填错了」。
+            java.time.LocalDateTime time = form.observeTime();
+            if (time != null && (time.getYear() < 1000 || time.getYear() > 9999)) {
+                throw new BizException("观测时间需在 1000 年到 9999 年之间");
+            }
+            target.setObserveTime(time);
+        }
         if (form.longitude() != null) target.setLongitude(form.longitude());
         if (form.latitude() != null) target.setLatitude(form.latitude());
         if (form.locationName() != null) target.setLocationName(form.locationName());

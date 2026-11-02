@@ -190,8 +190,13 @@ onMounted(async () => {
         speciesId: s.speciesId, count: s.count, behavior: s.behavior, note: s.note
       }))
     } catch (e) {
-      // 读不到原记录就绝不能停在这一页：接着编辑下去，保存的是一张空表单
-      alert(`读取观测记录失败：${e.message}`)
+      // 读不到原记录就绝不能停在这一页：接着编辑下去，保存的是一张空表单。
+      // 403 是后端「只能改自己提交的记录」的拒绝，不是登录失效（401 已被拦截器
+      // 统一处理），所以不能只弹窗——用户会反复试。
+      const msg = /403|无权|权限/.test(e?.message || '')
+        ? '你没有修改这条记录的权限（只能编辑自己提交的观测）'
+        : `读取观测记录失败：${e?.message || '未知错误'}`
+      alert(msg)
       router.push('/observations')
     }
   }
@@ -241,6 +246,9 @@ async function analyze() {
 }
 
 async function submit() {
+  // 按钮的 :disabled 要等下一帧才生效（Vue 异步更新 DOM），双击的第一帧能连发两次
+  // 请求；新增场景就是两条完全一样的记录
+  if (saving.value) return
   if (!form.ecosystemId) {
     alert('请选择生态系统')
     return

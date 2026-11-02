@@ -34,6 +34,7 @@ public class Ecosystem extends BaseEntity {
     private String code;
 
     @Column(columnDefinition = "TEXT")
+    @ToString.Exclude
     private String description;
 
     @Column(name = "image_url", length = 255)

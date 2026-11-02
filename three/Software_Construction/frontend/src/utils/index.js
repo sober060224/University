@@ -24,6 +24,10 @@ export const PROTECTION_LEVELS = [
     { name: '国家重点保护', color: '#f0a500' },
     { name: '自治区重点', color: '#c9a227' },
     { name: '有重要生态、科学、社会价值', color: '#0e9c9c' },
+    // AI 补全提示词里 protectionLevel 的合法值包含「其他」
+    // （AiService.TAXONOMY_PROMPT），表里没有它时，模型填「其他」的物种
+    // 在表单下拉里渲染成空白、在地图上掉回灰色——必须先对齐这两张表。
+    { name: '其他', color: '#78909c' },
     { name: '无', color: '#0a6e96' }
 ]
 
@@ -67,8 +71,18 @@ export function safeExternalUrl(value) {
  */
 export function safeRedirect(target, fallback = '/dashboard') {
     const value = typeof target === 'string' ? target.trim() : ''
+    // 先解码再判：/%5Cevil.com 在字面上首字符是 '/'，第二个字符是 '%'，
+    // 直接判能过；但浏览器/router 后续解码后它变成 /\evil.com，
+    // 而 //evil.com、/\evil.com 都是协议相对跳转，会把用户带出站。
+    let decoded = value
+    try {
+        decoded = decodeURIComponent(value)
+    } catch {
+        return fallback
+    }
     const isInternalPath = /^\/(?!\/|\\)/.test(value) && !/[\s\u0000-\u001f]/.test(value)
-    return isInternalPath ? value : fallback
+    const decodesToInternal = /^\/(?!\/|\\)/.test(decoded) && !/[\s\u0000-\u001f]/.test(decoded)
+    return isInternalPath && decodesToInternal ? value : fallback
 }
 
 /**
@@ -135,7 +149,21 @@ export function formatTime(value) {
 
 /** <input type="datetime-local"> 需要 yyyy-MM-ddTHH:mm 形式 */
 export function toInputTime(value) {
-    return value ? String(value).slice(0, 16) : ''
+    if (!value) {
+        return ''
+    }
+    const text = String(value)
+    // 后端 LocalDateTime 输出不带时区（2026-09-30T15:35:25），直接截断就是本地墙钟时间。
+    // 但万一某个接口改成带 Z / +08:00 的 ISO 串，截断会得到 UTC 时间，
+    // 编辑表单里的观测时间就莫名早了 8 小时。带时区的交给 Date 按本地时区格式化。
+    if (/[zZ]$|[+-]\d{2}:?\d{2}$/.test(text)) {
+        const date = new Date(text)
+        if (!Number.isNaN(date.getTime())) {
+            return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}`
+                + `T${pad(date.getHours())}:${pad(date.getMinutes())}`
+        }
+    }
+    return text.slice(0, 16)
 }
 
 /**

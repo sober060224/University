@@ -17,7 +17,13 @@ const props = defineProps({
 
 const emit = defineEmits(['change'])
 
-const totalPages = computed(() => Math.max(1, Math.ceil(props.total / props.size)))
+// size 为 0/负数时 Math.ceil 会得到 Infinity/NaN，Math.max(1, NaN) 仍是 NaN，
+// 模板会渲染「第 X / NaN 页」且下一页按钮永远可点
+const totalPages = computed(() => {
+    const step = Number(props.size) > 0 ? props.size : 10
+    const pages = Math.ceil((Number(props.total) || 0) / step)
+    return Number.isFinite(pages) ? Math.max(1, pages) : 1
+})
 
 function go(target) {
     if (target >= 1 && target <= totalPages.value) {

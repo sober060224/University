@@ -15,16 +15,22 @@ public interface SpeciesRepository extends JpaRepository<Species, Integer> {
     /**
      * 物种多条件组合检索（模块二第 4 项）。
      * isPublic 为数据级权限参数：公众角色传 true，只能看到对外开放的数据。
+     *
+     * <p>keyword 与 distribution 会被拼进 LIKE 的模式里，所以先把用户输入里的
+     * {@code %} 与 {@code _} 转义掉（转义符用 {@code !}，同时把 {@code !} 自己也转义，
+     * 不依赖各方言默认的反斜杠）：不转义的话，输入一个 {@code %} 就是「匹配全部」，
+     * 输入一个 {@code _} 就是「匹配任意单字」，搜索条件形同虚设。
      */
     @Query("""
             select s from Species s where
               (:isPublic is null or s.isPublic = :isPublic)
-              and (:keyword is null or lower(s.chineseName) like lower(concat('%', :keyword, '%'))
-                   or lower(s.scientificName) like lower(concat('%', :keyword, '%')))
+              and (:keyword is null
+                   or lower(s.chineseName) like lower(concat('%', replace(replace(replace(:keyword, '!', '!!'), '%', '!%'), '_', '!_'), '%')) escape '!'
+                   or lower(s.scientificName) like lower(concat('%', replace(replace(replace(:keyword, '!', '!!'), '%', '!%'), '_', '!_'), '%')) escape '!')
               and (:phylum is null or s.phylum = :phylum)
               and (:protectionLevel is null or s.protectionLevel = :protectionLevel)
               and (:endangerStatus is null or s.endangerStatus = :endangerStatus)
-              and (:distribution is null or s.distribution like concat('%', :distribution, '%'))
+              and (:distribution is null or s.distribution like concat('%', replace(replace(replace(:distribution, '!', '!!'), '%', '!%'), '_', '!_'), '%') escape '!')
             """)
     Page<Species> search(Boolean isPublic, String keyword, String phylum, String protectionLevel,
                          String endangerStatus, String distribution, Pageable pageable);
@@ -53,8 +59,10 @@ public interface SpeciesRepository extends JpaRepository<Species, Integer> {
      * 于是界面里三个示例问题一个都检索不到数据，模型只能对着空上下文作答。
      *
      * <p>这里改成「问题 like %物种名%」，正是自然语言点名某个已登记实体时该有的匹配方式。
-     * 排序交给调用方在 Java 侧按名字长度倒序处理，语句本身只按 id 排序：
-     * 「哪个名字更具体」是业务判据，放在 SQL 的 ORDER BY 函数表达式里既不好验证也不好改。
+     * <p>排序按名字长度倒序而不是 id 升序：调用方用 Pageable 取前几行当候选池，
+     * 池子的「取哪几条」是 SQL 决定的。原来按 id 排，一旦命中的行数超过窗口，
+     * 留在池外的恰好是 id 大的那批——而更具体（名字更长）的那条往往就在里面，
+     * Java 侧再怎么挑也挑不出没取回的行。
      * 候选集同样受 is_public 约束，与 matchByName 一致。
      */
     @Query("""
@@ -64,7 +72,7 @@ public interface SpeciesRepository extends JpaRepository<Species, Integer> {
                       and :question like concat('%', s.chineseName, '%'))
                 or (s.scientificName is not null and s.scientificName <> ''
                       and :question like concat('%', s.scientificName, '%')))
-            order by s.id
+            order by length(coalesce(s.chineseName, s.scientificName)) desc, s.id
             """)
     List<Species> findMentionedIn(String question, Boolean isPublic, Pageable pageable);
 
@@ -87,6 +95,22 @@ public interface SpeciesRepository extends JpaRepository<Species, Integer> {
     /** 看板概览的物种总数，同样按可见性过滤 */
     @Query("select count(s) from Species s where (:isPublic is null or s.isPublic = :isPublic)")
     long countVisible(Boolean isPublic);
+
+    /**
+     * 物种分布地图点位：只取地图用得上的 7 个短字段，并在 SQL 里直接滤掉无坐标行。
+     *
+     * <p>原先走 search(..., Pageable.unpaged()) 把全表连 description/distribution 两个
+     * TEXT 列整实体加载，只为拼几个字段；permitAll 接口上等于用一次全表扫描换 7 列数据。
+     * shortcut: 物种量到十万级且需要按图层/密度聚合时，应改成后端聚类或矢量切片。
+     */
+    @Query("""
+            select s.id, s.chineseName, s.scientificName, s.longitude, s.latitude,
+                   s.protectionLevel, s.endangerStatus
+            from Species s
+            where (:isPublic is null or s.isPublic = :isPublic)
+              and s.longitude is not null and s.latitude is not null
+            """)
+    List<Object[]> findMapPoints(Boolean isPublic);
 
     // ---- 模块四统计分析用的聚合查询 ----
     // 三条聚合同样带 isPublic 参数：看板对任何登录角色开放，

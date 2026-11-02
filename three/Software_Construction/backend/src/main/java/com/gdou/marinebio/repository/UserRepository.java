@@ -37,15 +37,21 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     @Query("select u from User u where u.role = :role order by u.id")
     List<User> lockAllByRole(@Param("role") Role role);
 
-    Page<User> findByStatus(UserStatus status, Pageable pageable);
+    /**
+     * 单行悲观锁：updateProfile 先锁住目标用户行，再按条件改字段并 save，
+     * 避免两个并发请求基于陈旧快照分别 save，导致其中一方的改动被静默覆盖（lost update）。
+     */
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select u from User u where u.id = :id")
+    Optional<User> lockById(@Param("id") Integer id);
 
     /** 管理端用户列表，支持按状态、角色、用户名/姓名关键词组合筛选 */
     @Query("""
             select u from User u where
               (:status is null or u.status = :status)
               and (:role is null or u.role = :role)
-              and (:keyword is null or lower(u.username) like lower(concat('%', :keyword, '%'))
-                   or lower(u.realName) like lower(concat('%', :keyword, '%')))
+              and (:keyword is null or (lower(u.username) like lower(concat('%', :keyword, '%'))
+                   or lower(u.realName) like lower(concat('%', :keyword, '%'))))
             """)
     Page<User> search(UserStatus status, Role role, String keyword, Pageable pageable);
 }

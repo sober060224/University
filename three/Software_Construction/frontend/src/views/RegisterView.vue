@@ -74,8 +74,25 @@ onMounted(async () => {
 })
 
 async function onSubmit() {
+    // 按钮 disabled 只是界面层，Enter 键 / 程序化触发 / 反应更新前的双击仍能进来，
+    // 会多提交一份注册申请
+    if (loading.value) return
     if (!form.username || !form.password || !form.realName) {
         error.value = '用户名、密码、真实姓名均为必填项'
+        return
+    }
+    // 与后端 Register @Size 对齐：此前只判非空，用户名 1 个字、密码 3 位都能发出去，
+    // 白白浪费一次往返才拿到 400
+    if (form.username.length < 3 || form.username.length > 50) {
+        error.value = '用户名长度需为 3–50 个字符'
+        return
+    }
+    if (form.password.length < 6 || form.password.length > 100) {
+        error.value = '密码长度需为 6–100 个字符'
+        return
+    }
+    if (form.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email)) {
+        error.value = '邮箱格式不正确'
         return
     }
     error.value = ''
@@ -84,7 +101,7 @@ async function onSubmit() {
         await authApi.register({ ...form })
         done.value = true
     } catch (e) {
-        error.value = e.message
+        error.value = e?.message || '注册失败，请稍后重试'
     } finally {
         loading.value = false
     }

@@ -14,12 +14,17 @@ const store = useUserStore()
 
 const loading = ref(false)
 const data = ref(null)
+// load 的在飞序号，用于丢弃过期回包（见 load()）
+let loadToken = 0
 const activeTab = ref('species')
 
 // 与 DashboardView 一致的配色，保证两个页面视觉统一
 const PALETTE = ['#0a6e96', '#0e9c9c', '#f0a500', '#e4572e', '#7b5ea7', '#3c8dbc', '#6b8e23', '#8b7355']
 
 function pieOption(title, pairs) {
+  // pairs 来自后端 dashboard，缺字段或接口降级时可能是 undefined；
+  // ECharts 收到 undefined 会直接抛错并让整个页面白掉，这里先归一成空数组
+  const rows = Array.isArray(pairs) ? pairs : []
   return {
     title: { text: title, left: 'center', textStyle: { fontSize: 14, color: '#1c2b36' } },
     color: PALETTE,
@@ -32,20 +37,21 @@ function pieOption(title, pairs) {
       avoidLabelOverlap: true,
       itemStyle: { borderColor: '#fff', borderWidth: 2 },
       label: { formatter: '{b}\n{d}%', fontSize: 11 },
-      data: pairs
+      data: rows
     }]
   }
 }
 
 function barOption(title, pairs, color) {
+  const rows = Array.isArray(pairs) ? pairs : []
   return {
     title: { text: title, left: 'center', textStyle: { fontSize: 14, color: '#1c2b36' } },
     color: [color],
     tooltip: { trigger: 'axis' },
     grid: { left: 45, right: 30, top: 60, bottom: 50 },
-    xAxis: { type: 'category', data: pairs.map(p => p.name), axisLabel: { rotate: pairs.length > 6 ? 30 : 0, fontSize: 11 } },
+    xAxis: { type: 'category', data: rows.map(p => p.name), axisLabel: { rotate: rows.length > 6 ? 30 : 0, fontSize: 11 } },
     yAxis: { type: 'value', minInterval: 1 },
-    series: [{ type: 'bar', barMaxWidth: 36, itemStyle: { borderRadius: [4, 4, 0, 0] }, data: pairs.map(p => p.value) }]
+    series: [{ type: 'bar', barMaxWidth: 36, itemStyle: { borderRadius: [4, 4, 0, 0] }, data: rows.map(p => p.value) }]
   }
 }
 
@@ -97,13 +103,18 @@ const observerOption = computed(() => ({
 }))
 
 async function load() {
+  // 在飞序号：刷新按钮与 onMounted 都能触发 load，回包乱序时旧响应会盖掉新数据，
+  // 且旧请求的 finally 会提前把 loading 置 false（看起来还是旧的）
+  const token = ++loadToken
   loading.value = true
   try {
-    data.value = await statsApi.dashboard()
+    const res = await statsApi.dashboard()
+    if (token !== loadToken) return
+    data.value = res
   } catch (e) {
-    alert(e.message)
+    if (token === loadToken) alert(e?.message || '统计加载失败，请稍后重试')
   } finally {
-    loading.value = false
+    if (token === loadToken) loading.value = false
   }
 }
 

@@ -1,5 +1,7 @@
 package com.gdou.marinebio.dto;
 
+import jakarta.validation.constraints.DecimalMax;
+import jakarta.validation.constraints.DecimalMin;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -69,7 +71,8 @@ public final class AuthForms {
     }
 
     public record ChangePassword(
-            @NotBlank(message = "请输入原密码") String oldPassword,
+            @NotBlank(message = "请输入原密码")
+            @Size(max = 100, message = "原密码长度不能超过 100 个字符") String oldPassword,
             @NotBlank(message = "请输入新密码")
             @Size(min = 6, max = 50, message = "新密码长度不能少于 6 位") String newPassword) {
     }
@@ -80,7 +83,8 @@ public final class AuthForms {
     }
 
     public record AssignRole(
-            @NotBlank(message = "请选择角色") String role) {
+            @NotBlank(message = "请选择角色")
+            @Size(max = 20, message = "角色长度不能超过 20 个字符") String role) {
     }
 
     /**
@@ -92,18 +96,22 @@ public final class AuthForms {
 
     /** 模块五：图像智能识别与物种鉴定 */
     public record Identify(
-            @NotBlank(message = "请先上传图片") @Size(max = 255) String imageUrl) {
+            @NotBlank(message = "请先上传图片")
+            @Size(max = 255, message = "图片地址长度不能超过 255 个字符") String imageUrl) {
     }
 
     /** 模块五：文本辅助分类与补全 */
     public record Complete(
-            @NotBlank(message = "请输入中文名或学名中的至少一项") @Size(max = 1000) String name) {
+            @NotBlank(message = "请输入中文名或学名中的至少一项")
+            @Size(max = 1000, message = "名称长度不能超过 1000 个字符") String name) {
     }
 
     /** 模块五：物种描述多语言翻译 */
     public record Translate(
-            @NotBlank(message = "没有可翻译的内容") @Size(max = 1000) String text,
-            @NotBlank(message = "请选择目标语言") @Size(max = 50) String targetLanguage) {
+            @NotBlank(message = "没有可翻译的内容")
+            @Size(max = 1000, message = "待翻译内容长度不能超过 1000 个字符") String text,
+            @NotBlank(message = "请选择目标语言")
+            @Size(max = 50, message = "目标语言长度不能超过 50 个字符") String targetLanguage) {
     }
 
     /**
@@ -112,14 +120,21 @@ public final class AuthForms {
      * 分析完再连同分析结果一起提交。
      */
     public record Analyze(
-            @Size(max = 30) String observeTime,
-            @Size(max = 200) String locationName,
-            Double longitude,
-            Double latitude,
-            @Size(max = 100) String ecosystemName,
+            @Size(max = 30, message = "观测时间长度不能超过 30 个字符") String observeTime,
+            @Size(max = 200, message = "观测地点长度不能超过 200 个字符") String locationName,
+            // 草稿数据同样要限范围：analyze 会把坐标拼进提示词交给模型，
+            // 一个 100000 的经度不会报错，只会让模型输出一段荒谬结果。
+            @DecimalMin(value = "-180.0", message = "经度需在 -180 到 180 之间")
+            @DecimalMax(value = "180.0", message = "经度需在 -180 到 180 之间") Double longitude,
+            @DecimalMin(value = "-90.0", message = "纬度需在 -90 到 90 之间")
+            @DecimalMax(value = "90.0", message = "纬度需在 -90 到 90 之间") Double latitude,
+            @Size(max = 100, message = "生态系统名称长度不能超过 100 个字符") String ecosystemName,
             // 每个物种名都会触发一次 matchByName 查询，不设上限等于让一个请求
             // 驱动任意多次数据库往返。
-            @Size(max = 50, message = "一次分析最多支持 50 个物种") List<@Size(max = 150) String> speciesNames) {
+            // 元素上既要限长度也要禁 null：直接拼进提示词时一个 null 就是字符串 "null"。
+            @Size(max = 50, message = "一次分析最多支持 50 个物种")
+            List<@NotBlank(message = "物种名不能为空")
+                 @Size(max = 150, message = "单个物种名长度不能超过 150 个字符") String> speciesNames) {
     }
 
     /** 模块五：智能问答与科研助手 */

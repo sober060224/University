@@ -35,12 +35,18 @@ function tagClass(module) {
   }[module] || 'tag--muted'
 }
 
+// 连续点搜索/翻页时，旧回包晚到会把旧条件的结果盖回去
+let loadToken = 0
+
 async function load() {
+  const token = ++loadToken
   error.value = ''
   try {
-    list.value = await logApi.list({ ...filters, page: toApiPage(page.value), size })
+    const data = await logApi.list({ ...filters, page: toApiPage(page.value), size })
+    if (token !== loadToken) return
+    list.value = data
   } catch (e) {
-    error.value = e.message
+    if (token === loadToken) error.value = e.message
   }
 }
 

@@ -44,18 +44,22 @@ public class User extends BaseEntity {
     private String password;
 
     @Column(name = "real_name", nullable = false, length = 50)
+    @ToString.Exclude
     private String realName;
 
     @Column(length = 10)
     private String gender;
 
     @Column(length = 20)
+    @ToString.Exclude
     private String phone;
 
     @Column(length = 100)
+    @ToString.Exclude
     private String email;
 
     @Column(length = 255)
+    @ToString.Exclude
     private String avatar;
 
     @Column(name = "student_no", length = 30)

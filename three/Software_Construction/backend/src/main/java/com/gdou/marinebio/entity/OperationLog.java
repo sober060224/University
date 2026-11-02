@@ -49,6 +49,7 @@ public class OperationLog extends BaseEntity {
     private Integer targetId;
 
     @Column(length = 500)
+    @ToString.Exclude
     private String detail;
 
     @Column(length = 50)

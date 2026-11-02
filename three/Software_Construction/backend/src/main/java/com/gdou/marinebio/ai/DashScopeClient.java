@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.MediaType;
+import org.springframework.http.client.ClientHttpResponse;
 import org.springframework.http.client.JdkClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.util.StringUtils;
@@ -31,7 +32,7 @@ import java.util.Map;
  *
  * 按非功能性需求「调用大模型服务需具备超时与重试机制」实现了：
  *   - 连接超时由 HttpClient 控制，读取超时由 JdkClientHttpRequestFactory 控制
- *   - 网络异常与 5xx 最多重试 maxRetry 次，退避 1 秒递增，且总耗时不超过 retryDeadline-ms
+ *   - 网络异常、5xx 与 429 限流最多重试 maxRetry 次，退避 1 秒递增，且总耗时不超过 retryDeadline-ms
  *     （retryDeadline-ms 必须明显小于前端 request.js 的 60 秒 axios 超时）
  *   - 4xx（含鉴权失败、参数错误）不重试，直接抛出，避免无意义地打接口
  */
@@ -133,18 +134,37 @@ public class DashScopeClient {
                         .body(Map.of("model", model, "messages", messages))
                         .retrieve()
                         .onStatus(HttpStatusCode::isError, (req, res) -> {
-                            byte[] body;
-                            try (var in = res.getBody()) {
-                                body = in.readAllBytes();
-                            }
-                            throw new BizException("大模型接口返回 " + res.getStatusCode().value() + "："
-                                    + new String(body, StandardCharsets.UTF_8));
+                            throw new UpstreamHttpException(res.getStatusCode().value(), readErrorBody(res));
                         })
                         .body(JsonNode.class);
-                return response.path("choices").path(0).path("message").path("content").asText("");
+                JsonNode content = response.path("choices").path(0).path("message").path("content");
+                // content 缺失（模型拒答、choices 为空、content 为 null）不能当成空字符串成功返回：
+                // 那样 AiService 会落一条 success=true 的记录、给用户一个空回答，
+                // 事后查日志只能看到「调用成功但没内容」，无法区分是上游异常还是真的没答案。
+                if (content.isMissingNode() || content.isNull()
+                        || (content.isTextual() && content.asText().isBlank())) {
+                    throw new BizException("大模型没有返回有效内容，请稍后重试");
+                }
+                return content.asText("");
+            } catch (UpstreamHttpException e) {
+                // 5xx 是上游瞬态故障，重试有意义；429 是限流，退避后重试正是官方建议的处理方式。
+                // 其余 4xx（鉴权、参数错误）重试只会白白打接口。
+                // 原来所有错误状态都在 onStatus 里包成 BizException，被下面的
+                // catch (RuntimeException) 直接抛出，类注释承诺的「5xx 最多重试 maxRetry 次」
+                // 从来不会发生 —— 实际只有 ResourceAccessException 会重试。
+                if (e.status < 500 && e.status != 429) {
+                    throw new BizException("大模型接口返回 " + e.status + "：" + e.body);
+                }
+                last = new BizException("大模型接口返回 " + e.status + "：" + e.body);
+                log.warn("第 {} 次调用大模型返回 {}，准备重试", attempt + 1, e.status);
+                if (!canRetry(attempt, start)) {
+                    break;
+                }
+                sleepBeforeRetry(attempt);
             } catch (ResourceAccessException e) {
                 // 超时或网络抖动 —— 这正是需要重试的情况
-                last = new BizException("调用大模型超时或网络异常：" + e.getMessage());
+                // 不拼 e.getMessage()：Spring 的 ResourceAccessException message 里带完整接口 URL
+                last = new BizException("调用大模型超时或网络异常，请稍后重试");
                 log.warn("第 {} 次调用大模型失败，准备重试：{}", attempt + 1, e.getMessage());
                 // 但只有「再来一次也还来得及」才重试。不看已花时间的重试会把用户拖死：
                 // 实测一次「文本辅助分类」第一次读超时 30 秒、重试又跑 25.7 秒才成功，
@@ -152,17 +172,55 @@ public class DashScopeClient {
                 // 同时放弃，用户看到「请求超时」，后端却替他把这次调用的钱花完、还写了一条
                 // success=true 的日志。这里用总时限把「慢」和「网络断了」区分开：
                 // 连不上（connect timeout 几秒）照旧重试，生成太慢就不再做第二次同样的等待。
-                long elapsed = System.currentTimeMillis() - start;
-                if (attempt >= maxRetry || elapsed + readTimeoutMs > retryDeadlineMs) {
+                if (!canRetry(attempt, start)) {
                     break;
                 }
                 sleepBeforeRetry(attempt);
             } catch (RuntimeException e) {
-                // 4xx / 解析失败属于确定性错误，重试没有意义，直接抛出
+                // 解析失败等确定性错误，重试没有意义，直接抛出
                 throw e;
             }
         }
         throw last == null ? new BizException("调用大模型失败") : last;
+    }
+
+    /**
+     * 还能不能再试一次：预算要连「下一次等待 + 下一次读超时」一起算进去。
+     *
+     * <p>原来只算 {@code elapsed + readTimeoutMs}，漏了退避睡眠（最多 maxRetry 秒），
+     * 于是最后一次重试的前置判断说「还来得及」，实际总耗时越过了前端 60 秒超时。
+     */
+    private boolean canRetry(int attempt, long start) {
+        if (attempt >= maxRetry) {
+            return false;
+        }
+        long elapsed = System.currentTimeMillis() - start;
+        long nextBackoffMs = 1000L * (attempt + 1);
+        return elapsed + nextBackoffMs + readTimeoutMs <= retryDeadlineMs;
+    }
+
+    /** 错误体的读取上限：上游 500 页有可能很大，全读进内存只为拼一句提示不值得 */
+    private static final int ERROR_BODY_MAX = 500;
+
+    private static String readErrorBody(ClientHttpResponse res) {
+        try (var in = res.getBody()) {
+            byte[] bytes = in.readNBytes(ERROR_BODY_MAX);
+            return new String(bytes, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            return "（无法读取响应体）";
+        }
+    }
+
+    /** 上游 HTTP 错误：带上状态码，好让调用方按 4xx / 5xx 决定要不要重试 */
+    private static final class UpstreamHttpException extends RuntimeException {
+        private final int status;
+        private final String body;
+
+        private UpstreamHttpException(int status, String body) {
+            super("upstream " + status);
+            this.status = status;
+            this.body = body;
+        }
     }
 
     private void sleepBeforeRetry(int attempt) {
@@ -217,7 +275,9 @@ public class DashScopeClient {
             String mime = Files.probeContentType(file);
             return "data:" + (mime == null ? "image/jpeg" : mime) + ";base64," + base64;
         } catch (Exception e) {
-            throw new BizException("读取图片失败：" + e.getMessage());
+            // 不拼 e.getMessage()：IOException 的 message 里是服务器绝对路径
+            log.warn("读取待识别图片失败: {}", file, e);
+            throw new BizException("读取图片失败，请重新上传后再试");
         }
     }
 }

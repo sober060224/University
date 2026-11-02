@@ -1,5 +1,6 @@
 package com.gdou.marinebio.controller;
 
+import com.gdou.marinebio.common.BizException;
 import com.gdou.marinebio.common.LoginUser;
 import com.gdou.marinebio.entity.Role;
 import com.gdou.marinebio.common.PageResult;
@@ -63,8 +64,8 @@ public class ObservationController {
 
     /** 模块四：观测地点地图数据点 */
     @GetMapping("/map")
-    public Result<List<Map<String, Object>>> map() {
-        return Result.ok(observationService.mapPoints());
+    public Result<List<Map<String, Object>>> map(@AuthenticationPrincipal LoginUser loginUser) {
+        return Result.ok(observationService.mapPoints(loginUser == null ? null : loginUser.getRole()));
     }
 
     /** 详情：一次返回观测记录本体 + 关联的物种列表 */
@@ -77,7 +78,7 @@ public class ObservationController {
     @PostMapping
     public Result<Observation> create(@Valid @RequestBody SpeciesForms.Observation form,
                                       @AuthenticationPrincipal LoginUser loginUser) {
-        return Result.ok("观测记录已创建", observationService.create(form, loginUser));
+        return Result.ok("观测记录已创建", observationService.create(form, requireLogin(loginUser)));
     }
 
     // 更新与新增共用同一份表单（species 带 @NotEmpty），所以这里同样要 @Valid
@@ -85,12 +86,25 @@ public class ObservationController {
     public Result<Observation> update(@PathVariable Integer id,
                                       @Valid @RequestBody SpeciesForms.Observation form,
                                       @AuthenticationPrincipal LoginUser loginUser) {
-        return Result.ok("观测记录已更新", observationService.update(id, form, loginUser));
+        return Result.ok("观测记录已更新", observationService.update(id, form, requireLogin(loginUser)));
     }
 
     @DeleteMapping("/{id}")
     public Result<Void> delete(@PathVariable Integer id, @AuthenticationPrincipal LoginUser loginUser) {
-        observationService.delete(id, loginUser);
+        observationService.delete(id, requireLogin(loginUser));
         return Result.ok("观测记录已删除", null);
+    }
+
+    /**
+     * 写操作的 operator 必须非空：Service 里会直接调 operator.getId()/getRole()，
+     * 传入 null 只会在很深的地方变成 NPE（而且已经先调过审计日志）。
+     * 这三个路径当前由 SecurityConfig 限定为 ADMIN/RESEARCHER，理论上不会为 null，
+     * 但一个 null 检查比「靠两个文件相距 150 行的规则保持一致」可靠。
+     */
+    private static LoginUser requireLogin(LoginUser loginUser) {
+        if (loginUser == null) {
+            throw new BizException("请先登录后再操作");
+        }
+        return loginUser;
     }
 }

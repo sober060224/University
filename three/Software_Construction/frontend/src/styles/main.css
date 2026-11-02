@@ -687,6 +687,9 @@ h1, h2, h3, h4 {
     padding: 22px;
     width: 100%;
     max-width: 420px;
+    /* 弹窗内容超过一屏时（长表单、错误列表），上下两端没有滚动容器就点不到。 */
+    max-height: calc(100vh - 40px);
+    overflow-y: auto;
 }
 
 .modal__title {

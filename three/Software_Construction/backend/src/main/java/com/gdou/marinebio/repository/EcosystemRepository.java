@@ -30,7 +30,7 @@ public interface EcosystemRepository extends JpaRepository<Ecosystem, Integer> {
             select e from Ecosystem e where
               e.name is not null and e.name <> ''
               and :question like concat('%', e.name, '%')
-            order by e.id
+            order by length(e.name) desc, e.id
             """)
     List<Ecosystem> findMentionedIn(String question, Pageable pageable);
 

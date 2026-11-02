@@ -97,21 +97,19 @@ public class SpeciesService {
 
     // ---------------- 模块四：分布地图与统计分析的数据源 ----------------
 
-    /** 物种分布地图的点位，只返回有坐标的物种 */
+    /** 物种分布地图的点位，只返回有坐标的物种（投影查询，不拉 TEXT 列） */
     public List<Map<String, Object>> mapPoints(Role role) {
         Boolean isPublic = canSeeAll(role) ? null : Boolean.TRUE;
-        return speciesRepository.search(isPublic, null, null, null, null, null, Pageable.unpaged())
-                .getContent().stream()
-                .filter(s -> s.getLongitude() != null && s.getLatitude() != null)
-                .map(s -> {
+        return speciesRepository.findMapPoints(isPublic).stream()
+                .map(row -> {
                     Map<String, Object> point = new LinkedHashMap<>();
-                    point.put("id", s.getId());
-                    point.put("name", s.getChineseName());
-                    point.put("scientificName", s.getScientificName());
-                    point.put("longitude", s.getLongitude());
-                    point.put("latitude", s.getLatitude());
-                    point.put("protectionLevel", s.getProtectionLevel());
-                    point.put("endangerStatus", s.getEndangerStatus());
+                    point.put("id", row[0]);
+                    point.put("name", row[1]);
+                    point.put("scientificName", row[2]);
+                    point.put("longitude", row[3]);
+                    point.put("latitude", row[4]);
+                    point.put("protectionLevel", row[5]);
+                    point.put("endangerStatus", row[6]);
                     return point;
                 })
                 .toList();
@@ -129,7 +127,12 @@ public class SpeciesService {
     private List<Map<String, Object>> toPairs(List<Object[]> rows) {
         return rows.stream().map(row -> {
             Map<String, Object> item = new LinkedHashMap<>();
-            item.put("name", row[0] == null ? "未填写" : row[0].toString());
+            // 与 StatsService.toPairs 保持同一收口：countGroupByPhylum 在 SQL 里滤了空串，
+            // 但 countGroupByProtectionLevel/EndangerStatus 只滤 is_public；表单允许
+            // 清空该字段（存 ""），null 走「未填写」而 "" 原样下发就会渲染成两根柱。
+            Object label = row[0];
+            boolean blank = label == null || String.valueOf(label).isBlank();
+            item.put("name", blank ? "未填写" : String.valueOf(label));
             item.put("value", ((Number) row[1]).longValue());
             return item;
         }).toList();
@@ -150,10 +153,16 @@ public class SpeciesService {
             return List.of();
         }
         Boolean isPublic = canSeeAll(role) ? null : Boolean.TRUE;
-        int safeLimit = Math.max(limit, 1);
+        // limit 来自调用方（智能问答的候选池大小），必须夹住上限：
+        // safeLimit * 3 直接进了 SQL 的 LIMIT，一个很大的入参就等于取消了分页。
+        int safeLimit = Math.min(Math.max(limit, 1), 10);
         // 多取一些再在 Java 侧按名字长度倒序截断：一句话里同时出现「红树林」和
-        // 「红树林弹涂鱼」时，更具体的那条才该是答案主体。判据放在这里而不是
-        // SQL 的 ORDER BY 函数表达式里，既可测又可改。
+        // 「红树林弹涂鱼」时，更具体的那条才该是答案主体。
+        // 但「取哪一些」必须交给 SQL：原来是 Pageable.ofSize(safeLimit * 3) 配上
+        // order by s.id，候选池就是「id 最小的 3N 行」——一句「请介绍弹涂鱼」里
+        // 「鱼」这种常见子串能命中几十行，id 小的先占满池子，真正更具体的
+        // 「弹涂鱼」即使命中也在池外，Java 侧再怎么排也变不出来。
+        // 改由仓储按名字长度倒序供给窗口，这里的排序只作兼保险。
         return speciesRepository
                 .findMentionedIn(question.trim(), isPublic,
                         org.springframework.data.domain.Pageable.ofSize(safeLimit * 3))

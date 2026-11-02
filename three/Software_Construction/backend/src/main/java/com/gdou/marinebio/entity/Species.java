@@ -55,9 +55,11 @@ public class Species extends BaseEntity {
     private String speciesName;
 
     @Column(columnDefinition = "TEXT")
+    @ToString.Exclude
     private String morphology;
 
     @Column(columnDefinition = "TEXT")
+    @ToString.Exclude
     private String habits;
 
     @Column(length = 255)
@@ -84,10 +86,12 @@ public class Species extends BaseEntity {
     private String videoUrl;
 
     @Column(columnDefinition = "TEXT")
+    @ToString.Exclude
     private String reference;
 
     /** 是否对公众开放。公众角色只能看到 isPublic=true 的物种，属于数据级权限 */
     @Column(name = "is_public")
+    @ToString.Exclude
     private Boolean isPublic = Boolean.TRUE;
 
     @Column(name = "created_by")

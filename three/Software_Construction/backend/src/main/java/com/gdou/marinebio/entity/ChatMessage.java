@@ -34,6 +34,7 @@ public class ChatMessage extends BaseEntity {
     private String role;
 
     @Column(columnDefinition = "TEXT")
+    @ToString.Exclude
     private String content;
 
     

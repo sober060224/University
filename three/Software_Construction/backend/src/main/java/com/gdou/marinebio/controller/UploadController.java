@@ -68,6 +68,10 @@ public class UploadController {
         if (file == null || file.isEmpty()) {
             throw new BizException("请选择要上传的图片");
         }
+        // 本方法本身不依靠 SecurityConfig 的 authenticated() 维持安全：规则和代码分属两处，
+        // 一旦规则被改成 permitAll（识别功能确实需要公众可传图），这里的 logService.record(loginUser, ...)
+        // 会直接 NPE —— 而且是在写完盘之后才炸。匿名上传本身就是允许的业务形态，
+        // 所以按「可能为 null」处理，而不是拿它当不可能发生的内部错误。
         String original = file.getOriginalFilename() == null ? "" : file.getOriginalFilename();
         String ext = original.contains(".") ? original.substring(original.lastIndexOf('.') + 1).toLowerCase(Locale.ROOT) : "";
         if (!ALLOWED_EXT.contains(ext)) {
@@ -98,14 +102,16 @@ public class UploadController {
 
     /** 读文件头若干字节与魔数比对，确认内容确实是该扩展名对应的图片 */
     private void checkMagic(MultipartFile file, String ext) {
-        byte[] head = new byte[16];
-        int read;
+        byte[] head;
         try (InputStream in = file.getInputStream()) {
-            read = in.read(head);
+            // read() 一次不一定读满它给的 buffer：短读一次就会把「没读全」误当成
+            // 「文件不是那个格式」，合法图片被拦下。readNBytes 要么读够，要么到流尾。
+            head = in.readNBytes(16);
         } catch (IOException e) {
             log.warn("读取上传文件内容失败", e);
             throw new BizException("图片内容无法读取，请重新选择文件");
         }
+        int read = head.length;
         if (read < 4) {
             throw new BizException("文件内容为空或已损坏");
         }

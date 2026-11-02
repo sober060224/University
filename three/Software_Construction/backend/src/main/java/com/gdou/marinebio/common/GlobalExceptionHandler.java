@@ -29,8 +29,15 @@ public class GlobalExceptionHandler {
 
     private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
-    /** 业务异常，例如「物种不存在」「用户名已被占用」 */
+    /**
+     * 业务异常，例如「物种不存在」「用户名已被占用」。
+     *
+     * <p>是客户端错误，回 400：原本落 200 + success:false，而只看 HTTP 状态的调用方
+     * 会把「物种不存在」当成一次成功请求统计进去。前端 request.js 对非 2xx 仍然读
+     * {@code error.response.data.message}，界面提示语不变。
+     */
     @ExceptionHandler(BizException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleBiz(BizException e) {
         return Result.fail(e.getMessage());
     }
@@ -39,8 +46,11 @@ public class GlobalExceptionHandler {
      * @Valid 校验失败。
      * 一次性返回所有字段错误，而不是只返第一条：否则一张表里有多个字段不合规时，
      * 用户得来回提交好几轮才能改完。
+     *
+     * <p>回 400：校验失败是客户端错误，落 200 会让只看状态码的调用方把它统计成成功。
      */
     @ExceptionHandler(MethodArgumentNotValidException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleValid(MethodArgumentNotValidException e) {
         String message = e.getBindingResult().getFieldErrors().stream()
                 .map(FieldError::getDefaultMessage)
@@ -51,19 +61,33 @@ public class GlobalExceptionHandler {
         return Result.fail(message);
     }
 
-    /** 登录失败：用户名或密码错误 */
+
+    /**
+     * 登录失败：用户名或密码错误。
+     *
+     * <p>回 401：前端 request.js 对 401 清本地状态并跳登录页，但在 /login 页上
+     * 有 pathname 守卫不会自跳，提示语照常展示——登录页传错口令体验不变。
+     */
     @ExceptionHandler(BadCredentialsException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public Result<Void> handleBadCredentials(BadCredentialsException e) {
         return Result.fail("用户名或密码错误");
     }
 
-    /** 账号未通过审核或被禁用 */
+    /**
+     * 账号未通过审核或被禁用。
+     *
+     * <p>回 403 而不是 401：口令已经对了，是账号状态不允许，不是认证凭据失效；
+     * 也避免前端把「未审核」误处理成会话过期而清状态。
+     */
     @ExceptionHandler(DisabledException.class)
+    @ResponseStatus(HttpStatus.FORBIDDEN)
     public Result<Void> handleDisabled(DisabledException e) {
         return Result.fail("账号未通过审核或已被禁用，请联系管理员");
     }
 
     @ExceptionHandler(AuthenticationException.class)
+    @ResponseStatus(HttpStatus.UNAUTHORIZED)
     public Result<Void> handleAuth(AuthenticationException e) {
         return Result.fail("认证失败，请重新登录");
     }
@@ -80,6 +104,7 @@ public class GlobalExceptionHandler {
      * 不该落进兜底分支让前端显示「服务器内部错误」。
      */
     @ExceptionHandler(HttpMessageNotReadableException.class)
+    @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleUnreadable(HttpMessageNotReadableException e) {
         log.warn("请求体解析失败: {}", e.getMessage());
         return Result.fail("请求数据格式有误，请检查后重试");
@@ -100,6 +125,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(MethodArgumentTypeMismatchException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleTypeMismatch(MethodArgumentTypeMismatchException e) {
+        // 枚举参数写错时把合法值回给客户端：只说「role 的值不合法」，
+        // 使用者得去翻文档才知道能填什么；这里直接从枚举常量拼出来。
+        Class<?> type = e.getRequiredType();
+        if (type != null && type.isEnum()) {
+            String allowed = java.util.Arrays.stream(type.getEnumConstants())
+                    .map(String::valueOf)
+                    .collect(java.util.stream.Collectors.joining("、"));
+            return Result.fail("参数「" + e.getName() + "」的值不合法，可选值：" + allowed);
+        }
         return Result.fail("参数「" + e.getName() + "」的值不合法");
     }
 
@@ -110,8 +144,9 @@ public class GlobalExceptionHandler {
         return Result.fail("缺少必填参数「" + e.getParameterName() + "」");
     }
 
-    /** 超出 spring.servlet.multipart.max-file-size 限制 */
+    /** 超出 spring.servlet.multipart.max-file-size 限制。客户端错误，理由同上不落 200。 */
     @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
     public Result<Void> handleUploadTooLarge(MaxUploadSizeExceededException e) {
         // 触发本异常的原因有两个：单文件超过 max-file-size，或整个请求超过 max-request-size。
         // 只写 5MB 会让「多文件请求总量超限」这种情况显示一个错误的阈值。
@@ -157,7 +192,9 @@ public class GlobalExceptionHandler {
     /** 沿因果链判断是不是「值太长 / 太大」这类客户端数据问题 */
     private static boolean isValueOutOfRange(Throwable e) {
         Throwable root = e;
-        while (root != null) {
+        // 因果链最多看 10 层：异常套异常套异常时无限循环虽然罕见，
+        // 但一个深链就能把每个请求的处理时间拖长，排查时也难看。
+        for (int depth = 0; root != null && depth < 10; depth++) {
             String msg = root.getMessage();
             if (msg != null) {
                 String m = msg.toLowerCase();
@@ -179,7 +216,7 @@ public class GlobalExceptionHandler {
     /** 沿因果链找出根因，判断是不是唯一键/外键之类的约束冲突 */
     private static boolean isConstraintConflict(Throwable e) {
         Throwable root = e;
-        while (root != null) {
+        for (int depth = 0; root != null && depth < 10; depth++) {
             String msg = root.getMessage();
             if (msg != null) {
                 String m = msg.toLowerCase();
@@ -221,7 +258,7 @@ public class GlobalExceptionHandler {
         }
         // 不带状态码的 ServletException 没有更合适的说法，按内部错误处理
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                .body(handleOther(e));
+                .body(Result.fail("服务器内部错误，请稍后重试"));
     }
 
     private static String describe(int status) {
@@ -233,10 +270,19 @@ public class GlobalExceptionHandler {
         };
     }
 
-    /** 兜底 */
+    /**
+     * 兜底。
+     *
+     * <p>必须回 500 而不是 HTTP 200 + success:false：这个文件里其它处理器要么自带
+     * {@code @ResponseStatus}、要么返回 {@code ResponseEntity}，唯独这里原来直接
+     * {@code return Result.fail(...)}，于是任何未被上面捕获的 NPE、数组越界都变成
+     * 一次「成功」请求 —— 网关、监控、重试脚本全部统计成成功，线上看不到异常。
+     * 前端 request.js 对非 2xx 会读 {@code error.response.data.message}，提示语不变。
+     */
     @ExceptionHandler(Exception.class)
-    public Result<Void> handleOther(Exception e) {
+    public ResponseEntity<Result<Void>> handleOther(Exception e) {
         log.error("未处理的异常", e);
-        return Result.fail("服务器内部错误，请稍后重试");
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Result.fail("服务器内部错误，请稍后重试"));
     }
 }

@@ -32,7 +32,10 @@ onMounted(() => {
     window.addEventListener('resize', resize)
 })
 
-watch(() => props.option, render, { deep: true })
+// 浅监听就够：所有用 ChartBox 的视图都把 option 写在 computed 里，
+// 任何一次数据变化都会是一个新对象。deep 监听会把整棵 option 树（含几百个点
+// 的 series data）逐层比对，而 setOption(..., true) 本来就会整体替换，白花开销。
+watch(() => props.option, render)
 
 onBeforeUnmount(() => {
     window.removeEventListener('resize', resize)

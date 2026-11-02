@@ -159,16 +159,40 @@ npm run dev
 
 ### 前端改动后同步到后端
 
-前端产物已复制到后端静态资源目录，因此前端改动后需重新构建并拷贝：
+`frontend/vite.config.js` 的 `build.outDir` 已直接指向后端静态资源目录，**构建即生效，不需要手工拷贝**：
 
 ```powershell
 cd frontend
-npm run build
-Copy-Item -Path dist\* -Destination ..\backend\src\main\resources\static\ -Recurse -Force
+npm run build      # 直接写入 ..\backend\src\main\resources\static\，并清掉旧 hash 文件
 
 cd ..\backend
 ./mvnw clean package
 ```
+
+> `backend/src/main/resources/static/` 与 `backend/uploads/` 已被 `.gitignore` 排除、不入版本库。
+> 新拉下仓库后这个目录是空的（后端仍能正常启动，只是前端页面 404），
+> 所以**首次运行前必须先执行一次 `npm run build`**。
+
+### 跑测试
+
+```powershell
+cd backend
+./mvnw test                     # 完整套件：68 run, 0 failures, 0 errors（需本机 MySQL80 + marine_biodiv 库）
+
+cd ..\frontend
+npm test                        # 前端：5 个测试文件 / 68 个用例
+```
+
+**手头没有 MySQL 时**，排除两个需要连库的用例即可（`SmokeTest`、`JpqlBootstrapTest`）：
+
+```powershell
+cd backend
+./mvnw test "-Dtest=!SmokeTest,!JpqlBootstrapTest"    # 66 run, 0 failures, 0 errors
+```
+
+> `cmd.exe` 里必须用双引号包住整个 `-D`（本机经 `.bat` 实测通过）；写成 `-Dtest=\"!A,!B\"` 会 exit 255。
+> git-bash 用单引号。另：不要用 `target/surefire-reports/*.txt` 通配汇总排除式运行的结果，
+> 被排除的测试类会留下上轮报告，汇总会读到旧数字。
 
 ### 运行测试
 

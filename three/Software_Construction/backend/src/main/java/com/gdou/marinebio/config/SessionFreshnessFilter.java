@@ -10,6 +10,7 @@ import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataAccessException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.security.web.authentication.logout.SecurityContextLogoutHandler;
@@ -30,6 +31,12 @@ import java.util.Objects;
  *
  * <p>绕开未登录请求：匿名浏览公开物种/生态系统的 permitAll 接口不产生任何
  * 数据库查询，这是系统的默认访问路径，不能给它加一次往返。
+ *
+ * <p>每个已登录请求多一次 findById 主键查询是设计代价而不是缺陷：这个过滤器的
+ * 全部意义就是「停用/降级/改密之后旧会话下一请求立即失效」，加一层缓存等于
+ * 把失效延迟换成缓存 TTL，安全语义就没了。主键命中在毫秒级；若登录用户量
+ * 大到这条查询成为瓶颈，应改成长连接失效事件（改密时 bump 版本号已经做了，
+ * 只是这里需要主动推），而不是牺牲即时失效。
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -47,7 +54,20 @@ public class SessionFreshnessFilter extends OncePerRequestFilter {
             return;
         }
 
-        User current = userRepository.findById(loginUser.getId()).orElse(null);
+        User current;
+        try {
+            current = userRepository.findById(loginUser.getId()).orElse(null);
+        } catch (DataAccessException e) {
+            // 数据库此刻不可达（连接池耗尽、网络抖动），不代表这个账号有问题。
+            // 此时只有两条路：把请求放行等于「查不到状态就当有效」，
+            // 停用/降级中的账号会趁这个空窗继续用——那是安全漏洞；
+            // 直接注销会话等于一次数据库抖动就把所有人踢下线。
+            // 取中间值：请求本身失败（503，前端会重试），但会话保留，
+            // 数据库恢复后同一个会话继续按真实状态判定。
+            log.warn("查询会话状态失败，本次请求拒绝但会话保留：{}", e.getMessage());
+            writeJson(response, 503, false, "服务暂时不可用，请稍后重试");
+            return;
+        }
         String reason = evaluate(loginUser, current);
         if (reason == null) {
             filterChain.doFilter(request, response);
@@ -83,6 +103,9 @@ public class SessionFreshnessFilter extends OncePerRequestFilter {
             throws IOException {
         res.setStatus(status);
         res.setContentType("application/json;charset=UTF-8");
-        res.getWriter().write("{\"success\":" + success + ",\"message\":\"" + message + "\",\"data\":null}");
+        // 与 SecurityConfig.writeJson 一样先把双引号与反斜杠转掉：提示语将来若拼进用户名，
+        // 一个引号就能把响应体拆坏。
+        String safe = message.replace("\\", "\\\\").replace("\"", "\\\"");
+        res.getWriter().write("{\"success\":" + success + ",\"message\":\"" + safe + "\",\"data\":null}");
     }
 }

@@ -9,6 +9,7 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.springframework.web.servlet.resource.PathResourceResolver;
 
 import java.io.IOException;
+import java.nio.file.Paths;
 
 /**
  * 静态资源与单页应用路由。
@@ -34,8 +35,11 @@ public class WebConfig implements WebMvcConfigurer {
     @Override
     public void addResourceHandlers(ResourceHandlerRegistry registry) {
         // /uploads/2026/09/xxx.jpg → <uploadDir>/2026/09/xxx.jpg
+        // 必须先转成绝对 URI：拼 "file:" + "./uploads" 是把工作目录当成部署目录，
+        // 换个目录 java -jar 就整片 404；路径里带空格或 # 时直接破坏 URI 解析。
+        String location = Paths.get(uploadDir).toAbsolutePath().normalize().toUri().toString();
         registry.addResourceHandler("/uploads/**")
-                .addResourceLocations("file:" + uploadDir + "/");
+                .addResourceLocations(location.endsWith("/") ? location : location + "/");
 
         registry.addResourceHandler("/**")
                 .addResourceLocations("classpath:/static/")
@@ -51,6 +55,11 @@ public class WebConfig implements WebMvcConfigurer {
                         }
                         // 接口路径写错时要如实 404，不能拿 SPA 首页冒充成功响应
                         if (resourcePath.startsWith("api/") || resourcePath.startsWith("/api/")) {
+                            return null;
+                        }
+                        // /uploads/ 下的东西是文件，不是前端路由：路径写错就该 404，
+                        // 把 index.html 返回给一张图片，前端只会拿到一个“解析失败的图片”。
+                        if (resourcePath.startsWith("uploads/")) {
                             return null;
                         }
                         // 前端是单页应用，未知路径一律交回 index.html 由 vue-router 处理

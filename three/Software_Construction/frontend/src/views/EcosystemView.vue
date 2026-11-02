@@ -64,8 +64,8 @@
         </div>
       </div>
       <div class="btn-group">
-        <button class="btn btn--ghost" @click="editing = false">取消</button>
-        <button class="btn" @click="save">保存</button>
+        <button class="btn btn--ghost" :disabled="saving" @click="editing = false">取消</button>
+        <button class="btn" :disabled="saving" @click="save">{{ saving ? '保存中…' : '保存' }}</button>
       </div>
     </div>
   </div>
@@ -89,6 +89,8 @@ const store = useUserStore()
 const rows = ref([])
 const loadError = ref('')
 const statsError = ref('')
+// load 的在飞序号：save/delete 后都会重拉，两次重叠时旧回包会盖掉新数据
+let loadToken = 0
 const editing = ref(false)
 // 观测次数 / 物种数属于统计，公众不请求也不渲染这两列
 const showCounts = computed(() => store.canViewStats)
@@ -99,6 +101,7 @@ const form = reactive({ id: null, name: '', code: '', description: '' })
 onMounted(load)
 
 async function load() {
+  const token = ++loadToken
   try {
     statsError.value = ''
     const [list, stats] = await Promise.all([
@@ -113,6 +116,7 @@ async function load() {
           : Promise.resolve([])
     ])
     const countById = new Map((stats || []).map((s) => [s.id, s]))
+    if (token !== loadToken) return
     const statsFailed = showCounts.value && statsError.value !== ''
     rows.value = (list || []).map((item) => ({
       ...item,
@@ -124,9 +128,10 @@ async function load() {
     }))
     loadError.value = ''
   } catch (e) {
+    if (token !== loadToken) return
     // 失败时不能停在「暂无数据」，那会把一次报错伪装成库里没有生态系统
     rows.value = []
-    loadError.value = `加载失败：${e.message}`
+    loadError.value = `加载失败：${e?.message || '未知错误'}`
   }
 }
 
@@ -146,22 +151,36 @@ async function open(row) {
   editing.value = true
 }
 
+// 保存是全异步的（create/update + 重新拉列表），按钮不置 disabled 时双击会发出两个 POST，
+// 直接多出一条重复的生态系统；请求进行中还能改掉 form，旧回包会把新编辑关掉。
+const saving = ref(false)
+
 async function save() {
+  if (saving.value) return
   if (!form.name.trim()) {
     alert('名称不能为空')
     return
   }
+  // 记下本次保存的目标，回包后确认用户没在途中改成另一条
+  const editingId = form.id
+  // 只发后端认的字段：form 里带着客户端用的 id，新增时后端看到它无关无害，
+  // 但一旦将来 DTO 加了 @Null 之类的约束就会白报一个错
+  const payload = { name: form.name, code: form.code, description: form.description }
+  saving.value = true
   try {
-    if (form.id) {
-      await ecosystemApi.update(form.id, form)
+    if (editingId) {
+      await ecosystemApi.update(editingId, payload)
     } else {
-      await ecosystemApi.create(form)
+      await ecosystemApi.create(payload)
     }
   } catch (e) {
     // 保存失败时保持弹窗打开，让用户改完再提交；否则弹窗关了、错误也看不到，只能反复点
-    alert(e.message)
+    alert(e?.message || '保存失败，请稍后重试')
     return
+  } finally {
+    saving.value = false
   }
+  if (form.id !== editingId) return
   editing.value = false
   await load()
 }

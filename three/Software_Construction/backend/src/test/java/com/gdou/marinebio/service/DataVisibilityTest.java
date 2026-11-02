@@ -192,6 +192,31 @@ class DataVisibilityTest {
         assertThat(admin).containsKey("observerStats");
     }
 
+    @Test
+    @DisplayName("分布统计的空白标签收口：null 与空串都必须渲染成「未填写」，否则同一项出两根柱")
+    void distributionStatsNormalizesBlankLabels() {
+        // 表单允许清空保护等级/濒危度（存空串），而 countGroupByProtectionLevel/
+        // countGroupByEndangerStatus 在 SQL 里只滤 is_public 不滤空值；
+        // null 走「未填写」而空串原样下发 name:""，前端图表就会渲染出
+        // 一根没有标签的柱和一根「未填写」的柱——同一概念拆成两根。
+        when(speciesRepository.countGroupByPhylum(any()))
+                .thenReturn(List.<Object[]>of(new Object[]{"", 2L}, new Object[]{null, 1L}));
+        when(speciesRepository.countGroupByProtectionLevel(any()))
+                .thenReturn(List.<Object[]>of(new Object[]{"  ", 4L}));
+        when(speciesRepository.countGroupByEndangerStatus(any()))
+                .thenReturn(List.<Object[]>of(new Object[]{"无危", 5L}));
+
+        Map<String, List<Map<String, Object>>> stats =
+                speciesService(speciesRepository).distributionStats(Role.ADMIN);
+
+        assertThat(stats.get("phylum")).extracting(m -> m.get("name"))
+                .containsOnly("未填写");
+        assertThat(stats.get("protectionLevel")).extracting(m -> m.get("name"))
+                .containsExactly("未填写");
+        assertThat(stats.get("endangerStatus")).extracting(m -> m.get("name"))
+                .containsExactly("无危");
+    }
+
     private SpeciesService speciesService(SpeciesRepository repo) {
         return new SpeciesService(repo, logService);
     }
@@ -463,7 +488,9 @@ class DataVisibilityTest {
         Ecosystem ecoLong = new Ecosystem();
         ecoLong.setId(2);
         ecoLong.setName("红树林湿地");
-        when(ecosystemRepository.findMentionedIn(any(), any())).thenReturn(List.of(ecoShort, ecoLong));
+        // 排序已下沉到查询（order by length(name) desc）：仓储按契约返回「最长优先」的结果，
+        // 服务只取第一条。这里模拟查询返回顺序，断言服务信任查询排序而非再在 Java 里排一次。
+        when(ecosystemRepository.findMentionedIn(any(), any())).thenReturn(List.of(ecoLong, ecoShort));
 
         assertThat(ecoService.findMentionedIn("请总结红树林湿地生态系统中的物种变化").getName())
                 .isEqualTo("红树林湿地");
@@ -573,7 +600,7 @@ class DataVisibilityTest {
         Map<String, Object> masked = svc.listLinkedSpecies(7, Role.PUBLIC).get(0);
         assertThat(masked.get("chineseName")).isEqualTo("未公开物种");
         // 这三样在上一版里是原样发出的，实测返回里能看到 "speciesId":18,"count":10,"behavior":"跳跃、滑行于岩缝"
-        assertThat(masked.get("speciesId")).isNull();
+        assertThat(masked.get("speciesId")).isEqualTo(-1);
         assertThat(masked.get("count")).isNull();
         assertThat(masked.get("behavior")).isNull();
         assertThat(masked.get("note")).isNull();

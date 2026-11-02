@@ -40,7 +40,10 @@ public class EcosystemController {
     /** 模块四：各生态系统类型的观测次数与发现的物种数 */
     @GetMapping("/stats")
     public Result<List<Map<String, Object>>> stats(@AuthenticationPrincipal LoginUser loginUser) {
-        return Result.ok(statsService.ecosystemStats(loginUser.getRole()));
+        // 与 StatsController/ObservationController 同一写法：本路径虽由 SecurityConfig
+        // 拦在 STATS_ROLES 之后（loginUser 不会是 null），但路由规则和控制器注释分属两处，
+        // 一旦规则松动，这里不能变成 NPE。
+        return Result.ok(statsService.ecosystemStats(loginUser == null ? null : loginUser.getRole()));
     }
 
     @GetMapping("/{id}")
